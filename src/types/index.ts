@@ -66,18 +66,34 @@ export type BugCategory =
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
 export type Difficulty = 'low' | 'medium' | 'high'
+export type EvidenceSource = 'excel' | 'document' | 'screenshot' | 'code' | 'inference' | 'missing'
+
+export interface EvidenceItem {
+  source: EvidenceSource
+  description: string
+}
+
+export interface RelatedFileWithReason {
+  path: string
+  reason: string
+}
 
 export interface BugAnalysis {
   category: BugCategory
   severity: Severity
   difficulty: Difficulty
-  confidence: number           // 0–1
-  summary: string              // 1 oración, qué está roto
-  affectedArea: string         // componente / función / módulo específico
-  probableCause: string        // explicación técnica detallada
-  suggestedFix: string         // qué cambiar y cómo
-  investigationSteps: string[] // pasos ordenados para el dev
-  relatedFiles: string[]       // paths reales del repo
+  confidence: number                        // 0–1
+  summary: string                           // 1 oración, qué está roto
+  affectedArea: string                      // componente / función / módulo específico
+  classificationReason: string             // por qué esta categoría
+  confidenceReason: string                 // por qué esta confianza
+  probableCause: string                    // qué se observó + dónde + hipótesis + certeza
+  suggestedFixSteps: string[]              // pasos concretos del fix
+  investigationSteps: string[]             // pasos ordenados para llegar al bug
+  evidenceUsed: EvidenceItem[]             // fuentes usadas con badge
+  cannotConclude: string[]                 // qué NO se puede afirmar
+  relatedFilesWithReasons: RelatedFileWithReason[]  // archivos + motivo
+  relatedFiles: string[]                   // derivado de relatedFilesWithReasons (compat)
   needsMoreInfo: boolean
   rawResponse: string
 }

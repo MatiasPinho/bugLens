@@ -209,6 +209,11 @@ function extractJSON(text: string): string {
   return stripped
 }
 
+function toStringArray(val: unknown): string[] {
+  if (!Array.isArray(val)) return []
+  return val.map(String).filter(Boolean)
+}
+
 function validateAnalysis(obj: unknown): BugAnalysis {
   if (typeof obj !== 'object' || obj === null) {
     throw new Error('La respuesta no es un objeto JSON')
@@ -231,6 +236,39 @@ function validateAnalysis(obj: unknown): BugAnalysis {
     throw new Error(`Confianza inválida: ${o['confidence']}`)
   }
 
+  // Parse relatedFilesWithReasons — support both array of objects and legacy array of strings
+  const VALID_SOURCES = new Set(['excel', 'document', 'screenshot', 'code', 'inference', 'missing'])
+
+  const relatedFilesWithReasons: BugAnalysis['relatedFilesWithReasons'] = []
+  if (Array.isArray(o['relatedFilesWithReasons'])) {
+    for (const item of o['relatedFilesWithReasons']) {
+      if (typeof item === 'object' && item !== null) {
+        const i = item as Record<string, unknown>
+        if (i['path']) relatedFilesWithReasons.push({ path: String(i['path']), reason: String(i['reason'] ?? '') })
+      } else if (typeof item === 'string' && item) {
+        relatedFilesWithReasons.push({ path: item, reason: '' })
+      }
+    }
+  }
+
+  // Parse evidenceUsed
+  const evidenceUsed: BugAnalysis['evidenceUsed'] = []
+  if (Array.isArray(o['evidenceUsed'])) {
+    for (const item of o['evidenceUsed']) {
+      if (typeof item === 'object' && item !== null) {
+        const i = item as Record<string, unknown>
+        const source = String(i['source'] ?? 'inference')
+        evidenceUsed.push({
+          source: (VALID_SOURCES.has(source) ? source : 'inference') as BugAnalysis['evidenceUsed'][0]['source'],
+          description: String(i['description'] ?? ''),
+        })
+      }
+    }
+  }
+
+  // Derive relatedFiles from relatedFilesWithReasons for backward compat
+  const relatedFiles = relatedFilesWithReasons.map((f) => f.path)
+
   return {
     category: o['category'] as BugAnalysis['category'],
     severity: o['severity'] as BugAnalysis['severity'],
@@ -238,12 +276,15 @@ function validateAnalysis(obj: unknown): BugAnalysis {
     confidence,
     summary: String(o['summary'] ?? ''),
     affectedArea: String(o['affectedArea'] ?? ''),
+    classificationReason: String(o['classificationReason'] ?? ''),
+    confidenceReason: String(o['confidenceReason'] ?? ''),
     probableCause: String(o['probableCause'] ?? ''),
-    suggestedFix: String(o['suggestedFix'] ?? ''),
-    investigationSteps: Array.isArray(o['investigationSteps'])
-      ? o['investigationSteps'].map(String).filter(Boolean)
-      : [],
-    relatedFiles: Array.isArray(o['relatedFiles']) ? o['relatedFiles'].map(String) : [],
+    suggestedFixSteps: toStringArray(o['suggestedFixSteps']),
+    investigationSteps: toStringArray(o['investigationSteps']),
+    evidenceUsed,
+    cannotConclude: toStringArray(o['cannotConclude']),
+    relatedFilesWithReasons,
+    relatedFiles,
     needsMoreInfo: Boolean(o['needsMoreInfo']),
     rawResponse: JSON.stringify(obj),
   }
@@ -290,9 +331,14 @@ export async function analyzeBug(
     confidence: 0,
     summary: 'No se pudo analizar este bug',
     affectedArea: '',
+    classificationReason: '',
+    confidenceReason: '',
     probableCause: `Error al analizar: ${lastError?.message ?? 'desconocido'}`,
-    suggestedFix: '',
+    suggestedFixSteps: [],
     investigationSteps: [],
+    evidenceUsed: [],
+    cannotConclude: [],
+    relatedFilesWithReasons: [],
     relatedFiles: [],
     needsMoreInfo: true,
     rawResponse: lastError?.message ?? '',
