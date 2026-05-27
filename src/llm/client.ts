@@ -1,6 +1,7 @@
 import { LLMConfig, LLMProvider, BugAnalysis } from '../types/index.js'
 import { SYSTEM_PROMPT, buildUserPrompt } from '../prompts/bugClassifier.js'
 import { EnrichedBug } from '../types/index.js'
+import { runAgentInvestigation } from './agentLoop.js'
 
 // ─── LLM Client abstraction ───────────────────────────────────────────────────
 
@@ -291,13 +292,31 @@ function validateAnalysis(obj: unknown): BugAnalysis {
 }
 
 /**
- * Analyzes an enriched bug. Retries once if the first response isn't valid JSON.
+ * Analyzes an enriched bug.
+ * If repoPaths are provided, runs an agentic investigation first (the LLM
+ * uses grep/read_file tools to navigate the repo), then does the final analysis.
+ * Retries once if the response isn't valid JSON.
  */
 export async function analyzeBug(
-  enriched: EnrichedBug,
-  config: LLMConfig
+  enriched:  EnrichedBug,
+  config:    LLMConfig,
+  repoPaths: string[]    = [],
+  sendLog?:  (msg: string) => void
 ): Promise<BugAnalysis> {
-  const userPrompt = buildUserPrompt(enriched)
+  // Phase 1: agentic investigation — LLM navigates the repo with tools
+  let gatheredCode = ''
+  if (repoPaths.filter(Boolean).length > 0) {
+    const { gatheredCode: code, toolCallCount, toolLog } = await runAgentInvestigation(
+      enriched, config, repoPaths, sendLog
+    )
+    gatheredCode = code
+    if (toolCallCount > 0) {
+      sendLog?.(`  Investigación: ${toolCallCount} consultas (${toolLog.map((l) => l.split('(')[0]).join(', ')})`)
+    }
+  }
+
+  // Phase 2: final structured analysis with gathered evidence
+  const userPrompt = buildUserPrompt(enriched, gatheredCode)
 
   // Collect images from Google Docs for vision-capable providers
   const allImages = enriched.googleDocs

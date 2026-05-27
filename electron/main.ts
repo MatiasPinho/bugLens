@@ -314,7 +314,8 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
           log('info', `  Código: ${files}`)
         }
 
-        const analysis = await analyzeBug(enriched, llmConfig)
+        const repoPaths = [s.frontendRepoPath, s.backendRepoPath].filter(Boolean)
+        const analysis = await analyzeBug(enriched, llmConfig, repoPaths, (msg) => log('info', msg))
         const result: AnalyzedBug = { enriched, analysis, processingMs: Date.now() - bugStart }
 
         results[i] = result

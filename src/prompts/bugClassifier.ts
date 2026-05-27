@@ -180,7 +180,7 @@ OUTPUT:
 
 // ─── User prompt builder ──────────────────────────────────────────────────────
 
-export function buildUserPrompt(enriched: EnrichedBug): string {
+export function buildUserPrompt(enriched: EnrichedBug, agentGatheredCode?: string): string {
   const { raw, googleDocs, codeFragments } = enriched
 
   const sections: string[] = []
@@ -223,7 +223,12 @@ export function buildUserPrompt(enriched: EnrichedBug): string {
     }
   }
 
-  if (codeFragments.length > 0) {
+  if (agentGatheredCode) {
+    sections.push('\n=== CÓDIGO INVESTIGADO POR EL AGENTE (fuente: code — leído directamente del repo) ===')
+    sections.push('Este código fue encontrado navegando activamente el repositorio con grep y lectura de archivos:\n')
+    sections.push(agentGatheredCode.slice(0, 12000))
+    if (agentGatheredCode.length > 12000) sections.push('[... código adicional omitido por longitud ...]')
+  } else if (codeFragments.length > 0) {
     sections.push('\n=== CÓDIGO FUENTE DEL PROYECTO (fuente: code) ===')
     sections.push('Fragmentos del repo real — usálos para identificar archivos, funciones y lógica concreta:\n')
     for (const frag of codeFragments) {
