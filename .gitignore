@@ -1,0 +1,29 @@
+node_modules/
+dist/
+
+# Datos locales / sesión del navegador
+data/
+*.json.bak
+google-session-cookies.json
+browser-profile/
+
+# Variables de entorno y claves
+.env
+.env.local
+.env.*
+
+# Índice del repo (se regenera)
+index/
+
+# Logs y temporales
+*.log
+test-*.mjs
+setup-ollama-*.sh
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
