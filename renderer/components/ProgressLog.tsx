@@ -5,18 +5,6 @@ interface Props {
   logs: LogLine[]
 }
 
-const levelStyles: Record<string, string> = {
-  info: 'text-gray-300',
-  warn: 'text-amber-400',
-  error: 'text-red-400',
-}
-
-const levelPrefix: Record<string, string> = {
-  info: '  ',
-  warn: '⚠ ',
-  error: '✗ ',
-}
-
 export default function ProgressLog({ logs }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -25,27 +13,36 @@ export default function ProgressLog({ logs }: Props) {
   }, [logs])
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="px-4 py-2 border-b border-gray-800 flex items-center gap-2">
-        <div className="text-xs text-gray-500 font-mono uppercase tracking-wider">Log</div>
+    <div className="h-full flex flex-col" style={{ background: '#101315' }}>
+      <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(93,99,103,0.18)' }}>
+        <span className="text-xs font-mono uppercase tracking-wider" style={{ color: '#343d41' }}>log</span>
         {logs.length > 0 && (
-          <span className="text-xs text-gray-600">{logs.length} líneas</span>
+          <span className="text-xs font-mono" style={{ color: '#343d41' }}>{logs.length}</span>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 font-mono text-xs">
         {logs.length === 0 ? (
-          <div className="text-gray-600 text-center mt-8">
-            El log aparecerá aquí durante el análisis...
+          <div className="text-center mt-10 font-mono" style={{ color: '#343d41' }}>
+            _ esperando...
           </div>
         ) : (
           logs.map((line) => (
-            <div key={line.id} className={`flex gap-2 leading-relaxed ${levelStyles[line.level]}`}>
-              <span className="text-gray-700 flex-shrink-0">
+            <div key={line.id} className="flex gap-2 leading-relaxed">
+              <span className="flex-shrink-0" style={{ color: '#343d41' }}>
                 {new Date(line.timestamp).toLocaleTimeString('es', { hour12: false })}
               </span>
-              <span className="flex-shrink-0">{levelPrefix[line.level]}</span>
-              <span className="break-all">{line.message}</span>
+              <span className="flex-shrink-0" style={{
+                color: line.level === 'error' ? '#de6145' : line.level === 'warn' ? '#c9a07a' : '#343d41'
+              }}>
+                {line.level === 'error' ? '✗' : line.level === 'warn' ? '⚠' : '›'}
+              </span>
+              <span className="break-all" style={{
+                color: line.level === 'error' ? '#de6145' : line.level === 'warn' ? '#c9c2b4' : '#798186'
+              }}>
+                {line.message}
+              </span>
             </div>
           ))
         )}

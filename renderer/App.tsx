@@ -31,12 +31,11 @@ export default function App() {
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
-      ...prev.slice(-499), // keep last 500
+      ...prev.slice(-499),
       { id: logCounter++, level, message, timestamp: timestamp ?? new Date().toISOString() },
     ])
   }, [])
 
-  // Set up IPC listeners
   useEffect(() => {
     const api = window.electronAPI
 
@@ -55,22 +54,18 @@ export default function App() {
     const cleanBugResult = api.onBugResult((ev: IPCEvent) => {
       if (ev.type !== 'bug-result') return
       const e = ev as BugResultEvent
-      // Append result immediately — table updates in real-time
       setResults((prev) => {
-        // Avoid duplicates if complete event also fires
         const exists = prev.some((r) => r.enriched.raw.id === e.result.enriched.raw.id)
         return exists ? prev : [...prev, e.result]
       })
-      // Switch to showing results as soon as first one arrives
       setPhase('analyzing')
     })
 
     const cleanComplete = api.onAnalysisComplete((ev: IPCEvent) => {
       if (ev.type !== 'complete') return
-      // Replace with final ordered list
       setResults(ev.results as AnalyzedBug[])
       setPhase('done')
-      addLog('info', `✅ Análisis completo: ${(ev.results as AnalyzedBug[]).length} bugs procesados`)
+      addLog('info', `análisis completo: ${(ev.results as AnalyzedBug[]).length} bugs procesados`)
     })
 
     const cleanIndex = api.onIndexProgress((ev: IPCEvent) => {
@@ -79,7 +74,6 @@ export default function App() {
       setIndexProgress({ filesProcessed: e.filesProcessed, totalFiles: e.totalFiles, message: e.message })
     })
 
-    // Check index on mount
     api.hasIndex().then((r: { hasIndex: boolean }) => setHasIndex(r.hasIndex))
 
     return () => {
@@ -97,29 +91,29 @@ export default function App() {
     setResults([])
     setLogs([])
     setShowLogs(false)
-    setProgress({ current: 0, total: 0, message: 'Iniciando...' })
-    addLog('info', 'Iniciando análisis...')
+    setProgress({ current: 0, total: 0, message: 'iniciando...' })
+    addLog('info', 'iniciando análisis...')
 
     const result = await window.electronAPI.runAnalysis(excelPath)
     if (!result.ok) {
-      addLog('error', `Error: ${result.error}`)
+      addLog('error', `error: ${result.error}`)
       setPhase('idle')
     }
   }, [excelPath, addLog])
 
   const handleIndexRepos = useCallback(async () => {
     setIsIndexing(true)
-    setIndexProgress({ filesProcessed: 0, totalFiles: 0, message: 'Iniciando indexación...' })
-    addLog('info', 'Iniciando indexación de repos...')
+    setIndexProgress({ filesProcessed: 0, totalFiles: 0, message: 'iniciando indexación...' })
+    addLog('info', 'iniciando indexación de repos...')
 
     const result = await window.electronAPI.indexRepos()
     setIsIndexing(false)
 
     if (result.ok) {
       setHasIndex(true)
-      addLog('info', 'Repos indexados correctamente')
+      addLog('info', 'repos indexados correctamente')
     } else {
-      addLog('error', `Error al indexar: ${result.error}`)
+      addLog('error', `error al indexar: ${result.error}`)
     }
   }, [addLog])
 
@@ -127,9 +121,9 @@ export default function App() {
     if (!excelPath || results.length === 0) return
     const result = await window.electronAPI.exportExcel(excelPath, results)
     if (result.ok) {
-      addLog('info', `Excel exportado: ${result.filePath}`)
+      addLog('info', `exportado: ${result.filePath}`)
     } else if (result.error) {
-      addLog('error', `Error al exportar: ${result.error}`)
+      addLog('error', `error al exportar: ${result.error}`)
     }
   }, [excelPath, results, addLog])
 
@@ -142,17 +136,16 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-gray-950">
+    <div className="flex flex-col h-screen bg-om-base text-om-fg">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 bg-gray-900 border-b border-gray-800 flex-shrink-0">
+      <header className="flex items-center justify-between px-5 py-2.5 bg-om-surface border-b border-om-border/25 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-sm font-bold">
-            🐛
-          </div>
-          <span className="font-semibold text-gray-100">Bug Analyzer</span>
+          <span className="text-om-fgmuted font-mono text-sm tracking-tight">
+            <span className="text-om-accent">~/</span>buglens
+          </span>
           {hasIndex && (
-            <span className="text-xs bg-green-900 text-green-300 border border-green-700 px-2 py-0.5 rounded-full">
-              Índice activo
+            <span className="text-xs text-om-fgmuted border border-om-border/30 px-2 py-0.5 rounded font-mono">
+              idx
             </span>
           )}
         </div>
@@ -162,19 +155,18 @@ export default function App() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
                 tab === t
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                  ? 'bg-om-accent text-om-base font-semibold'
+                  : 'text-om-muted hover:text-om-fg hover:bg-om-raised'
               }`}
             >
-              {t === 'main' ? '🏠 Principal' : '⚙️ Configuración'}
+              {t === 'main' ? 'main' : 'config'}
             </button>
           ))}
         </nav>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 overflow-hidden">
         {tab === 'settings' ? (
           <Settings
@@ -188,7 +180,7 @@ export default function App() {
         ) : (
           <div className="flex h-full">
             {/* Left panel */}
-            <div className="w-80 flex-shrink-0 flex flex-col gap-4 p-4 border-r border-gray-800 overflow-y-auto">
+            <div className="w-72 flex-shrink-0 flex flex-col gap-3 p-4 border-r border-om-border/20 overflow-y-auto">
               <FileUpload
                 excelPath={excelPath}
                 onFileSelected={setExcelPath}
@@ -197,24 +189,23 @@ export default function App() {
 
               {phase === 'idle' && (
                 <button
-                  className="btn-primary w-full flex items-center justify-center gap-2"
+                  className="btn-primary w-full"
                   onClick={handleAnalyze}
                   disabled={!excelPath}
                 >
-                  <span>🔍</span>
-                  Analizar bugs
+                  analizar bugs
                 </button>
               )}
 
               {phase === 'analyzing' && (
                 <div className="card">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-                    <div className="text-xs text-gray-400 flex-1 truncate">{progress.message}</div>
+                    <span className="w-1.5 h-1.5 bg-om-accent rounded-full animate-pulse flex-shrink-0" />
+                    <span className="text-xs text-om-fgmuted flex-1 truncate font-mono">{progress.message}</span>
                   </div>
-                  <div className="w-full bg-gray-800 rounded-full h-1.5">
+                  <div className="w-full bg-om-dim/40 rounded-full h-0.5">
                     <div
-                      className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+                      className="bg-om-accent h-0.5 rounded-full transition-all duration-500"
                       style={{
                         width: progress.total > 0
                           ? `${(progress.current / progress.total) * 100}%`
@@ -223,43 +214,33 @@ export default function App() {
                     />
                   </div>
                   {progress.total > 0 && (
-                    <div className="text-xs text-gray-600 mt-1 text-right">
-                      {progress.current} / {progress.total}
+                    <div className="text-xs text-om-muted mt-1.5 font-mono text-right">
+                      {progress.current}/{progress.total}
                     </div>
                   )}
                   <button
                     onClick={() => setShowLogs((v) => !v)}
-                    className="text-xs text-gray-600 hover:text-gray-400 mt-2 w-full text-left"
+                    className="text-xs text-om-muted hover:text-om-fgmuted mt-2 w-full text-left font-mono transition-colors"
                   >
-                    {showLogs ? '▼ Ocultar logs' : '▶ Ver logs'}
+                    {showLogs ? '▼ log' : '▶ log'}
                   </button>
                 </div>
               )}
 
               {phase === 'done' && (
                 <div className="flex flex-col gap-2">
-                  <button
-                    className="btn-primary w-full flex items-center justify-center gap-2"
-                    onClick={handleExport}
-                  >
-                    <span>📥</span>
-                    Exportar Excel
+                  <button className="btn-primary w-full" onClick={handleExport}>
+                    exportar excel
                   </button>
-                  <button
-                    className="btn-secondary w-full"
-                    onClick={handleReset}
-                  >
-                    Nuevo análisis
+                  <button className="btn-secondary w-full" onClick={handleReset}>
+                    nuevo análisis
                   </button>
                 </div>
               )}
 
-              {/* Stats */}
               {phase === 'done' && results.length > 0 && (
                 <div className="card">
-                  <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
-                    Resumen
-                  </div>
+                  <div className="section-label">resumen</div>
                   <StatsGrid results={results} />
                 </div>
               )}
@@ -269,13 +250,11 @@ export default function App() {
             <div className="flex-1 flex flex-col overflow-hidden">
               {results.length > 0 ? (
                 <div className="flex flex-col h-full">
-                  {/* Live results table */}
-                  <div className={showLogs ? 'flex-1 overflow-hidden' : 'flex-1 overflow-hidden'}>
+                  <div className="flex-1 overflow-hidden">
                     <BugTable results={results} analyzing={phase === 'analyzing'} />
                   </div>
-                  {/* Collapsible log strip */}
                   {showLogs && (
-                    <div className="h-40 flex-shrink-0 border-t border-gray-800">
+                    <div className="h-40 flex-shrink-0 border-t border-om-border/20">
                       <ProgressLog logs={logs} />
                     </div>
                   )}
@@ -303,26 +282,26 @@ function StatsGrid({ results }: { results: AnalyzedBug[] }) {
     { categories: {} as Record<string, number>, severities: {} as Record<string, number> }
   )
 
-  const severityColors: Record<string, string> = {
-    critical: 'text-red-400',
-    high: 'text-orange-400',
-    medium: 'text-amber-400',
-    low: 'text-green-400',
+  const severityColor: Record<string, string> = {
+    critical: 'text-om-red',
+    high:     'text-[#c9a07a]',
+    medium:   'text-om-cream',
+    low:      'text-om-fgdim',
   }
 
   return (
-    <div className="space-y-2 text-xs">
-      {Object.entries(counts.severities).map(([s, n]) => (
+    <div className="space-y-1 text-xs font-mono">
+      {Object.entries(counts.severities).sort().map(([s, n]) => (
         <div key={s} className="flex justify-between">
-          <span className={severityColors[s] ?? 'text-gray-400'}>{s}</span>
-          <span className="text-gray-300 font-mono">{n}</span>
+          <span className={severityColor[s] ?? 'text-om-fgmuted'}>{s}</span>
+          <span className="text-om-fg">{n}</span>
         </div>
       ))}
-      <div className="border-t border-gray-800 pt-2 mt-2">
-        {Object.entries(counts.categories).map(([c, n]) => (
+      <div className="border-t border-om-border/20 pt-1.5 mt-1.5">
+        {Object.entries(counts.categories).sort().map(([c, n]) => (
           <div key={c} className="flex justify-between">
-            <span className="text-indigo-400">{c}</span>
-            <span className="text-gray-300 font-mono">{n}</span>
+            <span className="text-om-fgmuted">{c}</span>
+            <span className="text-om-fg">{n}</span>
           </div>
         ))}
       </div>

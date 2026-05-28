@@ -22,30 +22,10 @@ interface Props {
 }
 
 const LLM_OPTIONS = [
-  {
-    id: 'ollama',
-    name: 'Ollama',
-    description: 'Local y gratis. Requiere Ollama instalado. Modelos recomendados: mistral, llama3, codellama.',
-    icon: '🦙',
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic (Claude)',
-    description: 'Alta calidad. Requiere API key. Modelo por defecto: claude-sonnet-4-6.',
-    icon: '🤖',
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    description: 'Rápido y económico. Requiere API key. Modelo por defecto: gemini-1.5-flash.',
-    icon: '✨',
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    description: 'Ampliamente adoptado. Requiere API key. Modelo por defecto: gpt-4o-mini.',
-    icon: '🧠',
-  },
+  { id: 'ollama',    name: 'ollama',    description: 'Local y gratis. Requiere Ollama instalado.' },
+  { id: 'anthropic', name: 'anthropic', description: 'Alta calidad. Requiere ANTHROPIC_API_KEY.' },
+  { id: 'gemini',    name: 'gemini',    description: 'Rápido y económico. Requiere GEMINI_API_KEY.' },
+  { id: 'openai',    name: 'openai',    description: 'Requiere OPENAI_API_KEY.' },
 ]
 
 export default function Settings({
@@ -100,7 +80,7 @@ export default function Settings({
 
   const startAuth = async () => {
     if (!settings.googleClientId || !settings.googleClientSecret) {
-      alert('Necesitás configurar el Client ID y Client Secret de Google antes de autenticarte.')
+      alert('Configurá el Client ID y Client Secret de Google antes de autenticarte.')
       return
     }
     await window.electronAPI.saveSettings({
@@ -112,42 +92,42 @@ export default function Settings({
     setAuthLoading(false)
     if (result.ok) {
       setGoogleAuth({ authenticated: true })
-      addLog('info', 'Google OAuth completado correctamente')
+      addLog('info', 'google oauth completado')
     } else {
-      addLog('error', `Error en Google OAuth: ${result.error}`)
+      addLog('error', `error en google oauth: ${result.error}`)
     }
   }
 
   const revokeAuth = async () => {
     await window.electronAPI.revokeAuth()
     setGoogleAuth({ authenticated: false })
-    addLog('info', 'Sesión de Google revocada')
+    addLog('info', 'sesión de google revocada')
   }
 
   const startBrowserLogin = async () => {
     setBrowserAuthLoading(true)
-    addLog('info', 'Abriendo ventana de login de Google...')
+    addLog('info', 'abriendo ventana de login...')
     const result = await window.electronAPI.startBrowserLogin()
     setBrowserAuthLoading(false)
     if (result.ok) {
       setBrowserAuth({ authenticated: true })
-      addLog('info', '✓ Sesión del navegador guardada — los docs se van a leer automáticamente')
+      addLog('info', '✓ sesión del navegador guardada')
     } else {
-      addLog('error', `Error en login del navegador: ${result.error}`)
+      addLog('error', `error en login: ${result.error}`)
     }
   }
 
   const revokeBrowserAuth = async () => {
     await window.electronAPI.revokeBrowserAuth()
     setBrowserAuth({ authenticated: false })
-    addLog('info', 'Sesión del navegador eliminada')
+    addLog('info', 'sesión del navegador eliminada')
   }
 
   const deleteIndex = async () => {
-    if (!confirm('¿Borrar el índice del repo? Tendrás que re-indexar.')) return
+    if (!confirm('¿Borrar el índice del repo?')) return
     await window.electronAPI.deleteIndex()
     onIndexDeleted()
-    addLog('info', 'Índice eliminado')
+    addLog('info', 'índice eliminado')
   }
 
   const checkOllama = async () => {
@@ -156,7 +136,7 @@ export default function Settings({
   }
 
   const startOllama = async () => {
-    addLog('info', 'Iniciando Ollama...')
+    addLog('info', 'iniciando ollama...')
     const result = await window.electronAPI.startOllama()
     addLog(result.ok ? 'info' : 'error', result.message)
     if (result.ok) {
@@ -166,148 +146,108 @@ export default function Settings({
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 max-w-2xl mx-auto">
-      <h2 className="text-xl font-semibold text-gray-100 mb-6">Configuración</h2>
+    <div className="h-full overflow-y-auto p-6 max-w-2xl mx-auto font-mono">
+      <div className="text-xs uppercase tracking-wider mb-6" style={{ color: '#4b4e55' }}>
+        ~/buglens/config
+      </div>
 
-      {/* ─── Repos ─────────────────────────────────────────────── */}
-      <Section title="📁 Repositorios locales">
-        <DirField
-          label="Repo Frontend"
-          value={settings.frontendRepoPath}
-          onChange={update('frontendRepoPath')}
-          onPick={() => pickDir('frontendRepoPath')}
-        />
-        <DirField
-          label="Repo Backend"
-          value={settings.backendRepoPath}
-          onChange={update('backendRepoPath')}
-          onPick={() => pickDir('backendRepoPath')}
-        />
+      {/* ── Repos ── */}
+      <Section title="repositorios locales">
+        <DirField label="repo frontend" value={settings.frontendRepoPath}
+          onChange={update('frontendRepoPath')} onPick={() => pickDir('frontendRepoPath')} />
+        <DirField label="repo backend" value={settings.backendRepoPath}
+          onChange={update('backendRepoPath')} onPick={() => pickDir('backendRepoPath')} />
 
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            className="btn-primary flex items-center gap-2"
-            onClick={onIndexRepos}
-            disabled={isIndexing || (!settings.frontendRepoPath && !settings.backendRepoPath)}
-          >
-            {isIndexing ? '⏳ Indexando...' : '🔍 Indexar repos'}
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <button className="btn-primary" onClick={onIndexRepos}
+            disabled={isIndexing || (!settings.frontendRepoPath && !settings.backendRepoPath)}>
+            {isIndexing ? 'indexando...' : 'indexar repos'}
           </button>
-
           {hasIndex && !isIndexing && (
-            <button className="btn-danger text-sm" onClick={deleteIndex}>
-              🗑 Borrar índice
-            </button>
+            <button className="btn-danger text-xs" onClick={deleteIndex}>borrar índice</button>
           )}
-
           {hasIndex && !isIndexing && (
-            <span className="text-xs text-green-400">✓ Índice activo</span>
+            <span className="text-xs" style={{ color: '#9fa5a9' }}>✓ índice activo</span>
           )}
         </div>
 
         {isIndexing && (
           <div className="mt-3">
-            <div className="text-sm text-gray-400 mb-1">{indexProgress.message}</div>
-            <div className="w-full bg-gray-800 rounded-full h-2">
-              <div
-                className="bg-indigo-500 h-2 rounded-full transition-all"
-                style={{
-                  width: indexProgress.totalFiles > 0
-                    ? `${(indexProgress.filesProcessed / indexProgress.totalFiles) * 100}%`
-                    : '5%',
-                }}
-              />
+            <div className="text-xs mb-1" style={{ color: '#798186' }}>{indexProgress.message}</div>
+            <div className="w-full rounded-full h-0.5" style={{ background: 'rgba(75,78,85,0.40)' }}>
+              <div className="h-0.5 rounded-full transition-all" style={{
+                background: '#798186',
+                width: indexProgress.totalFiles > 0
+                  ? `${(indexProgress.filesProcessed / indexProgress.totalFiles) * 100}%`
+                  : '5%',
+              }} />
             </div>
-            <div className="text-xs text-gray-600 mt-1">
-              {indexProgress.filesProcessed} / {indexProgress.totalFiles} archivos
+            <div className="text-xs mt-1" style={{ color: '#343d41' }}>
+              {indexProgress.filesProcessed}/{indexProgress.totalFiles} archivos
             </div>
           </div>
         )}
       </Section>
 
-      {/* ─── Google Docs access ─────────────────────────────────── */}
-      <Section title="📄 Acceso a Google Docs">
-        {/* ── Browser session (recommended) ── */}
+      {/* ── Google Docs ── */}
+      <Section title="acceso a google docs">
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-medium text-gray-200">🌐 Login con navegador</span>
-            <span className="text-xs bg-indigo-900 text-indigo-300 px-2 py-0.5 rounded-full">Recomendado</span>
+            <span className="text-xs" style={{ color: '#cacccc' }}>login con navegador</span>
+            <span className="text-xs px-1.5 py-0.5 rounded font-mono"
+              style={{ color: '#798186', border: '1px solid rgba(121,129,134,0.30)' }}>recomendado</span>
           </div>
-          <p className="text-xs text-gray-500 mb-3">
-            Abre una ventana de Chromium donde hacés login en Google normalmente.
-            Las cookies se guardan localmente. No requiere admin, no requiere aprobar la app en Google Cloud.
+          <p className="text-xs mb-3" style={{ color: '#4b4e55' }}>
+            Abre una ventana de Chromium. Las cookies se guardan localmente. No requiere admin.
           </p>
 
           {browserAuth?.authenticated ? (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-green-400">✓ Sesión activa</span>
-              <button className="btn-danger text-sm" onClick={revokeBrowserAuth}>
-                Cerrar sesión
-              </button>
+              <span className="text-xs" style={{ color: '#9fa5a9' }}>✓ sesión activa</span>
+              <button className="btn-danger text-xs" onClick={revokeBrowserAuth}>cerrar sesión</button>
             </div>
           ) : (
-            <button
-              className="btn-primary flex items-center gap-2"
-              onClick={startBrowserLogin}
-              disabled={browserAuthLoading}
-            >
-              {browserAuthLoading
-                ? '⏳ Esperando login...'
-                : '🌐 Conectar con navegador'}
+            <button className="btn-primary" onClick={startBrowserLogin} disabled={browserAuthLoading}>
+              {browserAuthLoading ? 'esperando login...' : 'conectar con navegador'}
             </button>
           )}
         </div>
 
-        {/* ── OAuth toggle ── */}
-        <div className="border-t border-gray-800 pt-3">
+        <div className="pt-3" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
           <button
-            className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1"
+            className="text-xs transition-colors"
+            style={{ color: '#343d41' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#4b4e55')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#343d41')}
             onClick={() => setShowOAuth((v) => !v)}
           >
-            {showOAuth ? '▼' : '▶'} OAuth avanzado (requiere Google Cloud y aprobación del admin)
+            {showOAuth ? '▼' : '▶'} oauth avanzado
           </button>
 
           {showOAuth && (
-            <div className="mt-3">
-              <p className="text-xs text-gray-600 mb-3">
-                Requiere crear un proyecto en Google Cloud Console con Docs API + Drive API habilitadas.
+            <div className="mt-3 space-y-3">
+              <p className="text-xs" style={{ color: '#343d41' }}>
+                Requiere Google Cloud Console con Docs API + Drive API habilitadas.
               </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="label">Client ID</label>
-                  <input
-                    type="text"
-                    className="input font-mono text-sm"
-                    placeholder="1234567890-abc...apps.googleusercontent.com"
-                    value={settings.googleClientId}
-                    onChange={update('googleClientId')}
-                  />
-                </div>
-                <div>
-                  <label className="label">Client Secret</label>
-                  <input
-                    type="password"
-                    className="input font-mono text-sm"
-                    placeholder="GOCSPX-..."
-                    value={settings.googleClientSecret}
-                    onChange={update('googleClientSecret')}
-                  />
-                </div>
+              <div>
+                <label className="label">client id</label>
+                <input type="text" className="input text-xs" placeholder="1234...apps.googleusercontent.com"
+                  value={settings.googleClientId} onChange={update('googleClientId')} />
               </div>
-              <div className="mt-3 flex items-center gap-3">
+              <div>
+                <label className="label">client secret</label>
+                <input type="password" className="input text-xs" placeholder="GOCSPX-..."
+                  value={settings.googleClientSecret} onChange={update('googleClientSecret')} />
+              </div>
+              <div className="flex items-center gap-3">
                 {googleAuth?.authenticated ? (
                   <>
-                    <span className="text-sm text-green-400">✓ OAuth autenticado</span>
-                    <button className="btn-danger text-sm" onClick={revokeAuth}>
-                      Desconectar
-                    </button>
+                    <span className="text-xs" style={{ color: '#9fa5a9' }}>✓ oauth autenticado</span>
+                    <button className="btn-danger text-xs" onClick={revokeAuth}>desconectar</button>
                   </>
                 ) : (
-                  <button
-                    className="btn-secondary flex items-center gap-2"
-                    onClick={startAuth}
-                    disabled={authLoading}
-                  >
-                    {authLoading ? '⏳ Esperando...' : '🔗 Conectar con OAuth'}
+                  <button className="btn-secondary text-xs" onClick={startAuth} disabled={authLoading}>
+                    {authLoading ? 'esperando...' : 'conectar con oauth'}
                   </button>
                 )}
               </div>
@@ -316,129 +256,99 @@ export default function Settings({
         </div>
       </Section>
 
-      {/* ─── LLM ────────────────────────────────────────────────── */}
-      <Section title="🤖 Modelo LLM">
-        <div className="space-y-2">
+      {/* ── LLM ── */}
+      <Section title="modelo llm">
+        <div className="space-y-1.5 mb-4">
           {LLM_OPTIONS.map((opt) => (
             <label
               key={opt.id}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors
-                ${settings.llmProvider === opt.id
-                  ? 'border-indigo-600 bg-indigo-950/50'
-                  : 'border-gray-800 hover:border-gray-700'
-                }`}
+              className="flex items-start gap-3 p-2.5 rounded cursor-pointer transition-colors"
+              style={{
+                border: `1px solid ${settings.llmProvider === opt.id ? 'rgba(121,129,134,0.50)' : 'rgba(93,99,103,0.22)'}`,
+                background: settings.llmProvider === opt.id ? 'rgba(121,129,134,0.08)' : 'transparent',
+              }}
             >
-              <input
-                type="radio"
-                name="llmProvider"
-                value={opt.id}
+              <input type="radio" name="llmProvider" value={opt.id}
                 checked={settings.llmProvider === opt.id}
                 onChange={() => setSettings((prev) => ({ ...prev, llmProvider: opt.id }))}
-                className="mt-0.5"
-              />
+                className="mt-0.5" />
               <div className="flex-1">
-                <div className="font-medium text-gray-200">
-                  {opt.icon} {opt.name}
+                <div className="text-xs" style={{ color: settings.llmProvider === opt.id ? '#cacccc' : '#798186' }}>
+                  {opt.name}
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">{opt.description}</div>
+                <div className="text-xs mt-0.5" style={{ color: '#343d41' }}>{opt.description}</div>
               </div>
             </label>
           ))}
         </div>
 
-        <div className="mt-4 space-y-3">
-          {settings.llmProvider === 'ollama' && (
-            <>
-              <div>
-                <label className="label">Base URL de Ollama</label>
-                <input
-                  type="text"
-                  className="input font-mono text-sm"
-                  value={settings.ollamaBaseUrl}
-                  onChange={update('ollamaBaseUrl')}
-                />
-              </div>
-              <div>
-                <label className="label">Modelo</label>
-                <input
-                  type="text"
-                  className="input font-mono text-sm"
-                  placeholder="mistral, llama3, codellama..."
-                  value={settings.llmModel}
-                  onChange={update('llmModel')}
-                />
-                {ollamaStatus?.models && ollamaStatus.models.length > 0 && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    Modelos disponibles:{' '}
-                    {ollamaStatus.models.map((m, i) => (
-                      <button
-                        key={i}
-                        className="text-indigo-400 hover:underline mr-2"
-                        onClick={() => setSettings((prev) => ({ ...prev, llmModel: m }))}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button className="btn-secondary text-sm" onClick={checkOllama}>
-                  Verificar Ollama
-                </button>
-                {ollamaStatus !== null && !ollamaStatus.available && (
-                  <button className="btn-primary text-sm" onClick={startOllama}>
-                    ▶ Iniciar Ollama
-                  </button>
-                )}
-                {ollamaStatus !== null && (
-                  <span className={`text-sm ${ollamaStatus.available ? 'text-green-400' : 'text-red-400'}`}>
-                    {ollamaStatus.available ? '✓ Disponible' : '✗ No disponible'}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-
-          {settings.llmProvider !== 'ollama' && (
+        {settings.llmProvider === 'ollama' && (
+          <div className="space-y-3">
             <div>
-              <label className="label">Modelo (opcional — deja vacío para usar el default)</label>
-              <input
-                type="text"
-                className="input font-mono text-sm"
-                placeholder="ej: gpt-4o, claude-opus-4-7, gemini-1.5-pro"
-                value={settings.llmModel}
-                onChange={update('llmModel')}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                Configurá la API key en el archivo <span className="font-mono">.env</span>
-              </div>
+              <label className="label">base url</label>
+              <input type="text" className="input text-xs" value={settings.ollamaBaseUrl} onChange={update('ollamaBaseUrl')} />
             </div>
-          )}
-        </div>
+            <div>
+              <label className="label">modelo</label>
+              <input type="text" className="input text-xs" placeholder="mistral, llama3, codellama..."
+                value={settings.llmModel} onChange={update('llmModel')} />
+              {ollamaStatus?.models && ollamaStatus.models.length > 0 && (
+                <div className="text-xs mt-1" style={{ color: '#343d41' }}>
+                  disponibles:{' '}
+                  {ollamaStatus.models.map((m, i) => (
+                    <button key={i} className="mr-2 transition-colors"
+                      style={{ color: '#798186' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#9fa5a9')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#798186')}
+                      onClick={() => setSettings((prev) => ({ ...prev, llmModel: m }))}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button className="btn-secondary text-xs" onClick={checkOllama}>verificar ollama</button>
+              {ollamaStatus !== null && !ollamaStatus.available && (
+                <button className="btn-primary text-xs" onClick={startOllama}>iniciar ollama</button>
+              )}
+              {ollamaStatus !== null && (
+                <span className="text-xs" style={{ color: ollamaStatus.available ? '#9fa5a9' : '#de6145' }}>
+                  {ollamaStatus.available ? '✓ disponible' : '✗ no disponible'}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {settings.llmProvider !== 'ollama' && (
+          <div>
+            <label className="label">modelo (opcional)</label>
+            <input type="text" className="input text-xs"
+              placeholder="ej: gpt-4o, claude-opus-4-7, gemini-1.5-pro"
+              value={settings.llmModel} onChange={update('llmModel')} />
+            <div className="text-xs mt-1" style={{ color: '#343d41' }}>
+              configurá la api key en el archivo .env
+            </div>
+          </div>
+        )}
       </Section>
 
-      {/* ─── Save button ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 mt-6">
-        <button
-          className="btn-primary px-8"
-          onClick={save}
-          disabled={saving}
-        >
-          {saving ? 'Guardando...' : 'Guardar configuración'}
+      {/* ── Save ── */}
+      <div className="flex items-center gap-3 mt-4 mb-8">
+        <button className="btn-primary" onClick={save} disabled={saving}>
+          {saving ? 'guardando...' : 'guardar'}
         </button>
-        {saved && <span className="text-sm text-green-400">✓ Guardado</span>}
+        {saved && <span className="text-xs" style={{ color: '#9fa5a9' }}>✓ guardado</span>}
       </div>
-
-      <div className="h-16" />
     </div>
   )
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="card mb-4">
-      <h3 className="font-medium text-gray-200 mb-4">{title}</h3>
+    <div className="card mb-3">
+      <div className="section-label mb-3">{title}</div>
       {children}
     </div>
   )
@@ -459,16 +369,9 @@ function DirField({
     <div className="mb-3">
       <label className="label">{label}</label>
       <div className="flex gap-2">
-        <input
-          type="text"
-          className="input font-mono text-sm flex-1"
-          placeholder="/ruta/al/repo"
-          value={value}
-          onChange={onChange}
-        />
-        <button className="btn-secondary flex-shrink-0" onClick={onPick}>
-          Explorar
-        </button>
+        <input type="text" className="input text-xs flex-1" placeholder="/ruta/al/repo"
+          value={value} onChange={onChange} />
+        <button className="btn-secondary text-xs flex-shrink-0" onClick={onPick}>explorar</button>
       </div>
     </div>
   )

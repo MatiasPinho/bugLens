@@ -24,8 +24,6 @@ export default function FileUpload({ excelPath, onFileSelected, disabled }: Prop
         return
       }
 
-      // In Electron, dragged files expose their path via webkitRelativePath or via the File object
-      // The actual system path is available as file.path in Electron
       const path = (file as { path?: string }).path
       if (path) {
         onFileSelected(path)
@@ -44,36 +42,47 @@ export default function FileUpload({ excelPath, onFileSelected, disabled }: Prop
 
   const fileName = excelPath ? excelPath.split(/[\\/]/).pop() : null
 
+  const borderColor = dragOver
+    ? 'rgba(121,129,134,0.60)'
+    : excelPath
+    ? 'rgba(159,165,169,0.35)'
+    : 'rgba(93,99,103,0.28)'
+
+  const bgColor = dragOver
+    ? 'rgba(121,129,134,0.06)'
+    : excelPath
+    ? 'rgba(159,165,169,0.04)'
+    : 'transparent'
+
   return (
     <div className="card">
-      <div className="text-sm font-medium text-gray-300 mb-3">Archivo Excel de bugs</div>
+      <div className="label mb-2">archivo excel</div>
 
       <div
         onDrop={handleDrop}
         onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onClick={handleBrowse}
-        className={`
-          border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all
-          ${dragOver ? 'border-indigo-500 bg-indigo-950' : 'border-gray-700 hover:border-gray-600'}
-          ${disabled ? 'opacity-40 cursor-not-allowed' : ''}
-          ${excelPath ? 'border-green-700 bg-green-950/30' : ''}
-        `}
+        className="rounded p-5 text-center cursor-pointer transition-all"
+        style={{
+          border: `1px dashed ${borderColor}`,
+          background: bgColor,
+          opacity: disabled ? 0.35 : 1,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+        }}
       >
         {excelPath ? (
           <div>
-            <div className="text-2xl mb-1">📊</div>
-            <div className="text-sm font-medium text-green-300 truncate max-w-full">{fileName}</div>
-            <div className="text-xs text-gray-500 mt-1">Click para cambiar</div>
+            <div className="text-xs font-mono mb-1" style={{ color: '#4b4e55' }}>xlsx</div>
+            <div className="text-xs font-mono truncate" style={{ color: '#9fa5a9' }}>{fileName}</div>
+            <div className="text-xs font-mono mt-1" style={{ color: '#343d41' }}>click para cambiar</div>
           </div>
         ) : (
           <div>
-            <div className="text-2xl mb-1">📂</div>
-            <div className="text-sm text-gray-400">
-              Arrastrá el Excel aquí<br />
-              <span className="text-gray-600">o click para explorar</span>
+            <div className="text-xs font-mono mb-1" style={{ color: '#343d41' }}>.xlsx · .xls · .csv</div>
+            <div className="text-xs font-mono" style={{ color: '#4b4e55' }}>
+              arrastrar o click
             </div>
-            <div className="text-xs text-gray-600 mt-2">.xlsx · .xls · .csv</div>
           </div>
         )}
       </div>

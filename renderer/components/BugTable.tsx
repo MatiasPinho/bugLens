@@ -8,42 +8,44 @@ interface Props {
 
 const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 
-const severityBadge: Record<Severity, string> = {
-  critical: 'badge-severity-critical',
-  high:     'badge-severity-high',
-  medium:   'badge-severity-medium',
-  low:      'badge-severity-low',
+// Omarchy-palette badge classes — defined as inline styles to avoid Tailwind purge issues with dynamic values
+const severityStyle: Record<Severity, { text: string; bg: string; border: string }> = {
+  critical: { text: '#de6145', bg: 'rgba(222,97,69,0.10)',  border: 'rgba(222,97,69,0.30)' },
+  high:     { text: '#c9a07a', bg: 'rgba(180,130,100,0.10)', border: 'rgba(180,130,100,0.28)' },
+  medium:   { text: '#c9c2b4', bg: 'rgba(201,194,180,0.08)', border: 'rgba(201,194,180,0.20)' },
+  low:      { text: '#9fa5a9', bg: 'rgba(159,165,169,0.08)', border: 'rgba(159,165,169,0.18)' },
 }
 
-const categoryColors: Record<BugCategory, string> = {
-  frontend:          'text-cyan-400 bg-cyan-950 border-cyan-800',
-  backend:           'text-violet-400 bg-violet-950 border-violet-800',
-  database:          'text-orange-400 bg-orange-950 border-orange-800',
-  config:            'text-yellow-400 bg-yellow-950 border-yellow-800',
-  data:              'text-pink-400 bg-pink-950 border-pink-800',
-  insufficient_info: 'text-gray-400 bg-gray-900 border-gray-700',
+const categoryStyle: Record<BugCategory, { text: string; bg: string; border: string }> = {
+  frontend:          { text: '#9fa5a9', bg: 'rgba(159,165,169,0.08)', border: 'rgba(159,165,169,0.20)' },
+  backend:           { text: '#798186', bg: 'rgba(121,129,134,0.08)', border: 'rgba(121,129,134,0.22)' },
+  database:          { text: '#c9c2b4', bg: 'rgba(201,194,180,0.08)', border: 'rgba(201,194,180,0.18)' },
+  config:            { text: '#aeaeae', bg: 'rgba(174,174,174,0.08)', border: 'rgba(174,174,174,0.18)' },
+  data:              { text: '#d9dbdc', bg: 'rgba(217,219,220,0.06)', border: 'rgba(217,219,220,0.16)' },
+  insufficient_info: { text: '#4b4e55', bg: 'rgba(75,78,85,0.08)',   border: 'rgba(75,78,85,0.20)' },
 }
 
-const difficultyStyle: Record<string, { label: string; color: string }> = {
-  low:    { label: 'Fácil',   color: 'text-green-400 bg-green-950 border-green-800' },
-  medium: { label: 'Medio',   color: 'text-amber-400 bg-amber-950 border-amber-800' },
-  high:   { label: 'Difícil', color: 'text-red-400 bg-red-950 border-red-800' },
+const difficultyStyle: Record<string, { label: string; text: string; bg: string; border: string }> = {
+  low:    { label: 'fácil',   text: '#9fa5a9', bg: 'rgba(159,165,169,0.08)', border: 'rgba(159,165,169,0.18)' },
+  medium: { label: 'medio',   text: '#c9c2b4', bg: 'rgba(201,194,180,0.08)', border: 'rgba(201,194,180,0.18)' },
+  high:   { label: 'difícil', text: '#de6145', bg: 'rgba(222,97,69,0.08)',   border: 'rgba(222,97,69,0.22)' },
 }
 
-const evidenceStyle: Record<EvidenceSource, { label: string; color: string }> = {
-  excel:      { label: 'Excel',      color: 'text-green-300 bg-green-950 border-green-800' },
-  document:   { label: 'Documento',  color: 'text-blue-300 bg-blue-950 border-blue-800' },
-  screenshot: { label: 'Captura',    color: 'text-purple-300 bg-purple-950 border-purple-800' },
-  code:       { label: 'Código',     color: 'text-indigo-300 bg-indigo-950 border-indigo-800' },
-  inference:  { label: 'Inferencia', color: 'text-amber-300 bg-amber-950 border-amber-800' },
-  missing:    { label: 'Falta',      color: 'text-red-300 bg-red-950 border-red-800' },
+const evidenceStyle: Record<EvidenceSource, { label: string; text: string; border: string }> = {
+  excel:      { label: 'excel',      text: '#9fa5a9', border: 'rgba(159,165,169,0.30)' },
+  document:   { label: 'doc',        text: '#c9c2b4', border: 'rgba(201,194,180,0.30)' },
+  screenshot: { label: 'captura',    text: '#aeaeae', border: 'rgba(174,174,174,0.30)' },
+  code:       { label: 'código',     text: '#798186', border: 'rgba(121,129,134,0.35)' },
+  inference:  { label: 'inferencia', text: '#c9a07a', border: 'rgba(180,130,100,0.30)' },
+  missing:    { label: 'falta',      text: '#de6145', border: 'rgba(222,97,69,0.30)' },
 }
 
-// ─── Small atoms ─────────────────────────────────────────────────────────────
+// ─── Atoms ────────────────────────────────────────────────────────────────────
 
-function Badge({ className, children }: { className: string; children: React.ReactNode }) {
+function OmBadge({ style, children }: { style: { text: string; bg: string; border: string }; children: React.ReactNode }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${className}`}>
+    <span style={{ color: style.text, background: style.bg, border: `1px solid ${style.border}` }}
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono">
       {children}
     </span>
   )
@@ -51,13 +53,13 @@ function Badge({ className, children }: { className: string; children: React.Rea
 
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100)
-  const color = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500'
+  const color = pct >= 80 ? '#9fa5a9' : pct >= 50 ? '#c9c2b4' : '#de6145'
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-16 bg-gray-800 rounded-full h-1.5">
-        <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      <div className="w-14 rounded-full h-0.5" style={{ background: 'rgba(75,78,85,0.50)' }}>
+        <div className="h-0.5 rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="text-xs text-gray-400">{pct}%</span>
+      <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>{pct}%</span>
     </div>
   )
 }
@@ -67,7 +69,12 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-      className="text-xs px-1.5 py-0.5 rounded border border-gray-700 hover:border-gray-500 text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+      className="text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0 transition-colors"
+      style={{
+        color: copied ? '#9fa5a9' : '#4b4e55',
+        border: '1px solid rgba(93,99,103,0.25)',
+        background: 'transparent',
+      }}
     >
       {copied ? '✓' : '⧉'}
     </button>
@@ -76,8 +83,8 @@ function CopyButton({ text }: { text: string }) {
 
 function SectionCard({ title, children, accent = false }: { title: string; children: React.ReactNode; accent?: boolean }) {
   return (
-    <div className={`rounded-lg border p-4 ${accent ? 'border-indigo-800 bg-indigo-950/20' : 'border-gray-800 bg-gray-900/40'}`}>
-      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{title}</div>
+    <div className={accent ? 'section-card-accent' : 'section-card'}>
+      <div className="section-label">{title}</div>
       {children}
     </div>
   )
@@ -86,8 +93,8 @@ function SectionCard({ title, children, accent = false }: { title: string; child
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-xs text-gray-600 uppercase tracking-wider mb-0.5">{label}</div>
-      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{value}</p>
+      <div className="label">{label}</div>
+      <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#9fa5a9' }}>{value}</p>
     </div>
   )
 }
@@ -103,31 +110,42 @@ function CodeBlock({ filePath, startLine, content, score }: {
   const displayed = expanded ? lines : lines.slice(0, 12)
 
   return (
-    <div className="rounded-lg border border-gray-800 overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-900 border-b border-gray-800">
-        <span className="font-mono text-xs text-indigo-300 flex-1 truncate">{fileName}</span>
-        <span className="text-xs text-gray-600">match {Math.round(score * 100)}%</span>
+    <div className="code-block">
+      <div className="code-block-header">
+        <span className="text-xs font-mono flex-1 truncate" style={{ color: '#798186' }}>{fileName}</span>
+        <span className="text-xs font-mono" style={{ color: '#343d41' }}>match {Math.round(score * 100)}%</span>
         <CopyButton text={content} />
       </div>
       <div className="relative">
-        <pre className="text-xs text-gray-300 p-3 overflow-x-auto bg-gray-950 leading-relaxed">
+        <pre className="text-xs p-3 overflow-x-auto leading-relaxed" style={{ color: '#9fa5a9', background: '#0d1013' }}>
           {displayed.map((line, i) => (
             <div key={i} className="flex gap-3">
-              <span className="select-none text-gray-700 w-6 text-right flex-shrink-0">{startLine + i}</span>
+              <span className="select-none w-6 text-right flex-shrink-0" style={{ color: '#343d41' }}>{startLine + i}</span>
               <span>{line}</span>
             </div>
           ))}
         </pre>
         {!expanded && lines.length > 12 && (
-          <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-gray-950 to-transparent flex items-end justify-center pb-1">
-            <button onClick={() => setExpanded(true)} className="text-xs text-indigo-400 hover:text-indigo-300">
-              + {lines.length - 12} líneas más
+          <div className="absolute bottom-0 left-0 right-0 h-8 flex items-end justify-center pb-1"
+            style={{ background: 'linear-gradient(to top, #0d1013, transparent)' }}>
+            <button onClick={() => setExpanded(true)}
+              className="text-xs font-mono transition-colors"
+              style={{ color: '#4b4e55' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#4b4e55')}>
+              + {lines.length - 12} líneas
             </button>
           </div>
         )}
         {expanded && lines.length > 12 && (
-          <div className="flex justify-center py-1 bg-gray-950 border-t border-gray-800">
-            <button onClick={() => setExpanded(false)} className="text-xs text-gray-600 hover:text-gray-400">Colapsar</button>
+          <div className="flex justify-center py-1 border-t" style={{ borderColor: 'rgba(93,99,103,0.22)', background: '#0d1013' }}>
+            <button onClick={() => setExpanded(false)}
+              className="text-xs font-mono transition-colors"
+              style={{ color: '#4b4e55' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#4b4e55')}>
+              colapsar
+            </button>
           </div>
         )}
       </div>
@@ -167,42 +185,46 @@ export default function BugTable({ results, analyzing = false }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800 flex-wrap flex-shrink-0">
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b flex-wrap flex-shrink-0"
+        style={{ borderColor: 'rgba(93,99,103,0.20)', background: '#101315' }}>
         <input
-          type="text" placeholder="Buscar bugs..."
+          type="text" placeholder="buscar..."
           value={search} onChange={(e) => setSearch(e.target.value)}
-          className="input text-sm w-52"
+          className="input text-xs w-44"
         />
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as BugCategory | 'all')} className="input text-sm w-36">
-          <option value="all">Categoría</option>
+        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as BugCategory | 'all')}
+          className="input text-xs w-32">
+          <option value="all">categoría</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value as Severity | 'all')} className="input text-sm w-36">
-          <option value="all">Severidad</option>
+        <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value as Severity | 'all')}
+          className="input text-xs w-32">
+          <option value="all">severidad</option>
           {severities.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span className="text-xs text-gray-500 ml-auto flex items-center gap-2">
+        <span className="text-xs font-mono ml-auto flex items-center gap-2" style={{ color: '#4b4e55' }}>
           {analyzing && (
-            <span className="flex items-center gap-1 text-indigo-400">
-              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" />
-              analizando...
+            <span className="flex items-center gap-1" style={{ color: '#798186' }}>
+              <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: '#798186' }} />
+              analizando
             </span>
           )}
-          {filtered.length} de {results.length} bugs
+          {filtered.length}/{results.length}
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-gray-950 border-b border-gray-800 z-10">
-            <tr className="text-left text-xs text-gray-500 uppercase tracking-wider">
-              <th className="px-4 py-2 font-medium">#</th>
-              <th className="px-4 py-2 font-medium">Título</th>
-              <th className="px-4 py-2 font-medium">Área afectada</th>
-              <th className="px-4 py-2 font-medium">Categoría</th>
-              <th className="px-4 py-2 font-medium">Severidad</th>
-              <th className="px-4 py-2 font-medium">Fix</th>
-              <th className="px-4 py-2 font-medium">Confianza</th>
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 z-10" style={{ background: '#101315', borderBottom: '1px solid rgba(93,99,103,0.20)' }}>
+            <tr style={{ color: '#4b4e55' }} className="text-left font-mono uppercase tracking-wider">
+              <th className="px-4 py-2 font-medium w-8">#</th>
+              <th className="px-4 py-2 font-medium">título</th>
+              <th className="px-4 py-2 font-medium">área</th>
+              <th className="px-4 py-2 font-medium">cat</th>
+              <th className="px-4 py-2 font-medium">sev</th>
+              <th className="px-4 py-2 font-medium">fix</th>
+              <th className="px-4 py-2 font-medium">conf</th>
             </tr>
           </thead>
           <tbody>
@@ -210,32 +232,44 @@ export default function BugTable({ results, analyzing = false }: Props) {
               const id = r.enriched.raw.id
               const isExpanded = expandedId === id
               const diff = difficultyStyle[r.analysis.difficulty] ?? difficultyStyle['medium']
+              const sv = severityStyle[r.analysis.severity]
+              const ct = categoryStyle[r.analysis.category]
 
               return (
                 <React.Fragment key={id}>
                   <tr
                     onClick={() => setExpandedId(isExpanded ? null : id)}
-                    className={`border-b border-gray-800 cursor-pointer transition-colors ${isExpanded ? 'bg-gray-900' : 'hover:bg-gray-900/50'}`}
+                    className="cursor-pointer transition-colors"
+                    style={{
+                      borderBottom: '1px solid rgba(93,99,103,0.12)',
+                      background: isExpanded ? '#141719' : 'transparent',
+                    }}
+                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(20,23,25,0.60)' }}
+                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent' }}
                   >
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{r.enriched.raw.rowIndex}</td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <div className="font-medium text-gray-100 truncate">{r.enriched.raw.title}</div>
-                      <div className="text-xs text-gray-500 truncate mt-0.5">{r.analysis.summary}</div>
-                      {r.analysis.needsMoreInfo && <span className="text-xs text-amber-500">⚠ Necesita más info</span>}
+                    <td className="px-4 py-2.5 font-mono" style={{ color: '#343d41' }}>{r.enriched.raw.rowIndex}</td>
+                    <td className="px-4 py-2.5 max-w-xs">
+                      <div className="font-medium truncate" style={{ color: '#cacccc' }}>{r.enriched.raw.title}</div>
+                      <div className="truncate mt-0.5 font-mono" style={{ color: '#4b4e55' }}>{r.analysis.summary}</div>
+                      {r.analysis.needsMoreInfo && (
+                        <span className="text-xs font-mono" style={{ color: '#c9a07a' }}>⚠ más info</span>
+                      )}
                     </td>
-                    <td className="px-4 py-3 max-w-[180px]">
-                      <div className="text-xs text-gray-400 font-mono truncate" title={r.analysis.affectedArea}>
+                    <td className="px-4 py-2.5 max-w-[160px]">
+                      <div className="font-mono truncate" style={{ color: '#4b4e55' }} title={r.analysis.affectedArea}>
                         {r.analysis.affectedArea || '—'}
                       </div>
                     </td>
-                    <td className="px-4 py-3"><Badge className={categoryColors[r.analysis.category]}>{r.analysis.category}</Badge></td>
-                    <td className="px-4 py-3"><Badge className={severityBadge[r.analysis.severity]}>{r.analysis.severity}</Badge></td>
-                    <td className="px-4 py-3"><Badge className={diff.color}>{diff.label}</Badge></td>
-                    <td className="px-4 py-3"><ConfidenceBar value={r.analysis.confidence} /></td>
+                    <td className="px-4 py-2.5"><OmBadge style={ct}>{r.analysis.category}</OmBadge></td>
+                    <td className="px-4 py-2.5"><OmBadge style={sv}>{r.analysis.severity}</OmBadge></td>
+                    <td className="px-4 py-2.5">
+                      <OmBadge style={{ text: diff.text, bg: diff.bg, border: diff.border }}>{diff.label}</OmBadge>
+                    </td>
+                    <td className="px-4 py-2.5"><ConfidenceBar value={r.analysis.confidence} /></td>
                   </tr>
 
                   {isExpanded && (
-                    <tr className="bg-gray-900/30">
+                    <tr>
                       <td colSpan={7} className="p-0">
                         <ExpandedDetail result={r} />
                       </td>
@@ -248,7 +282,9 @@ export default function BugTable({ results, analyzing = false }: Props) {
         </table>
 
         {filtered.length === 0 && (
-          <div className="text-center text-gray-600 py-16">No hay bugs que coincidan con los filtros</div>
+          <div className="text-center py-16 font-mono text-xs" style={{ color: '#4b4e55' }}>
+            sin resultados
+          </div>
         )}
       </div>
     </div>
@@ -261,92 +297,103 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
   const { enriched, analysis } = result
   const raw = enriched.raw
   const diff = difficultyStyle[analysis.difficulty] ?? difficultyStyle['medium']
+  const sv   = severityStyle[analysis.severity]
+  const ct   = categoryStyle[analysis.category]
   const allImages = enriched.googleDocs.flatMap((d) => d.images ?? [])
 
   return (
-    <div className="border-t border-gray-800">
+    <div style={{ borderTop: '1px solid rgba(93,99,103,0.20)' }}>
       {/* Header strip */}
-      <div className="flex items-start gap-4 px-6 py-4 bg-gray-900 border-b border-gray-800">
+      <div className="flex items-start gap-4 px-6 py-3"
+        style={{ background: '#141719', borderBottom: '1px solid rgba(93,99,103,0.16)' }}>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-gray-100 text-base mb-1">{raw.title}</div>
-          <div className="text-sm text-gray-400">{analysis.summary}</div>
+          <div className="font-medium text-sm mb-0.5" style={{ color: '#cacccc' }}>{raw.title}</div>
+          <div className="text-xs font-mono" style={{ color: '#4b4e55' }}>{analysis.summary}</div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Badge className={categoryColors[analysis.category]}>{analysis.category}</Badge>
-          <Badge className={severityBadge[analysis.severity]}>{analysis.severity}</Badge>
-          <Badge className={diff.color}>{diff.label}</Badge>
-          <div className="ml-2"><ConfidenceBar value={analysis.confidence} /></div>
+          <OmBadge style={ct}>{analysis.category}</OmBadge>
+          <OmBadge style={sv}>{analysis.severity}</OmBadge>
+          <OmBadge style={{ text: diff.text, bg: diff.bg, border: diff.border }}>{diff.label}</OmBadge>
+          <div className="ml-1"><ConfidenceBar value={analysis.confidence} /></div>
         </div>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="p-5 space-y-3" style={{ background: 'rgba(16,19,21,0.70)' }}>
 
-        {/* Row 1: Área afectada + razones de clasificación */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Área afectada + clasificación */}
+        <div className="grid grid-cols-2 gap-3">
           {analysis.affectedArea && (
-            <SectionCard title="🎯 Área afectada" accent>
+            <SectionCard title="área afectada" accent>
               <div className="flex items-start gap-2">
-                <code className="text-sm text-indigo-300 font-mono break-all flex-1">{analysis.affectedArea}</code>
+                <code className="text-xs font-mono break-all flex-1" style={{ color: '#798186' }}>
+                  {analysis.affectedArea}
+                </code>
                 <CopyButton text={analysis.affectedArea} />
               </div>
             </SectionCard>
           )}
 
-          <SectionCard title="🏷 Por qué esta clasificación">
+          <SectionCard title="por qué esta clasificación">
             {analysis.classificationReason ? (
-              <p className="text-sm text-gray-300 leading-relaxed">{analysis.classificationReason}</p>
+              <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{analysis.classificationReason}</p>
             ) : (
-              <p className="text-sm text-gray-600 italic">Sin información</p>
+              <p className="text-xs italic" style={{ color: '#343d41' }}>sin información</p>
             )}
             {analysis.confidenceReason && (
-              <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-800 leading-relaxed">
-                <span className="text-gray-600">Confianza: </span>{analysis.confidenceReason}
+              <p className="text-xs mt-2 pt-2 leading-relaxed" style={{ color: '#4b4e55', borderTop: '1px solid rgba(93,99,103,0.18)' }}>
+                {analysis.confidenceReason}
               </p>
             )}
           </SectionCard>
         </div>
 
-        {/* Row 2: Causa probable */}
-        <SectionCard title="🔍 Causa probable">
-          <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{analysis.probableCause}</div>
+        {/* Causa probable */}
+        <SectionCard title="causa probable">
+          <div className="text-xs leading-relaxed whitespace-pre-wrap font-mono" style={{ color: '#9fa5a9' }}>
+            {analysis.probableCause}
+          </div>
         </SectionCard>
 
-        {/* Row 3: Evidencia usada */}
+        {/* Evidencia */}
         {analysis.evidenceUsed && analysis.evidenceUsed.length > 0 && (
-          <SectionCard title="📎 Evidencia usada">
-            <div className="space-y-2">
+          <SectionCard title="evidencia usada">
+            <div className="space-y-1.5">
               {analysis.evidenceUsed.map((ev, i) => {
-                const style = evidenceStyle[ev.source] ?? evidenceStyle['inference']
+                const es = evidenceStyle[ev.source] ?? evidenceStyle['inference']
                 return (
                   <div key={i} className="flex items-start gap-2">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border flex-shrink-0 mt-0.5 ${style.color}`}>
-                      {style.label}
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5"
+                      style={{ color: es.text, border: `1px solid ${es.border}`, background: 'transparent' }}>
+                      {es.label}
                     </span>
-                    <span className="text-sm text-gray-300 leading-relaxed">{ev.description}</span>
+                    <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{ev.description}</span>
                   </div>
                 )
               })}
             </div>
             {allImages.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-gray-800">
-                <div className="text-xs text-gray-600 mb-2">{allImages.length} captura{allImages.length > 1 ? 's' : ''} del documento</div>
+              <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
+                <div className="text-xs font-mono mb-2" style={{ color: '#343d41' }}>
+                  {allImages.length} captura{allImages.length > 1 ? 's' : ''}
+                </div>
                 <DocImageGallery images={allImages} />
               </div>
             )}
           </SectionCard>
         )}
 
-        {/* Row 4: Fix + Investigación side by side */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Fix + Investigación */}
+        <div className="grid grid-cols-2 gap-3">
           {analysis.suggestedFixSteps && analysis.suggestedFixSteps.length > 0 && (
-            <SectionCard title="🛠 Fix sugerido">
+            <SectionCard title="fix sugerido">
               <ol className="space-y-2">
                 {analysis.suggestedFixSteps.map((step, i) => (
-                  <li key={i} className="flex gap-2.5 text-sm">
-                    <span className="flex-shrink-0 w-5 h-5 rounded bg-indigo-900 border border-indigo-700 text-indigo-300 text-xs flex items-center justify-center font-medium mt-0.5">
+                  <li key={i} className="flex gap-2.5">
+                    <span className="flex-shrink-0 w-4 h-4 rounded text-xs flex items-center justify-center font-mono mt-0.5"
+                      style={{ color: '#798186', border: '1px solid rgba(121,129,134,0.30)', background: 'transparent' }}>
                       {i + 1}
                     </span>
-                    <span className="text-gray-300 leading-relaxed">{step}</span>
+                    <span className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{step}</span>
                   </li>
                 ))}
               </ol>
@@ -354,14 +401,17 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           )}
 
           {analysis.investigationSteps && analysis.investigationSteps.length > 0 && (
-            <SectionCard title="📋 Pasos de investigación">
+            <SectionCard title="investigación">
               <ol className="space-y-2">
                 {analysis.investigationSteps.map((step, i) => (
-                  <li key={i} className="flex gap-2.5 text-sm">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-800 border border-gray-700 text-gray-400 text-xs flex items-center justify-center font-medium mt-0.5">
+                  <li key={i} className="flex gap-2.5">
+                    <span className="flex-shrink-0 w-4 h-4 rounded text-xs flex items-center justify-center font-mono mt-0.5"
+                      style={{ color: '#4b4e55', border: '1px solid rgba(75,78,85,0.30)', background: 'transparent' }}>
                       {i + 1}
                     </span>
-                    <span className="text-gray-300 leading-relaxed">{step.replace(/^Paso \d+:\s*/i, '')}</span>
+                    <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>
+                      {step.replace(/^Paso \d+:\s*/i, '')}
+                    </span>
                   </li>
                 ))}
               </ol>
@@ -369,18 +419,19 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           )}
         </div>
 
-        {/* Row 5: Archivos relacionados con motivo */}
+        {/* Archivos relacionados */}
         {analysis.relatedFilesWithReasons && analysis.relatedFilesWithReasons.length > 0 && (
-          <SectionCard title="📁 Archivos relacionados">
+          <SectionCard title="archivos relacionados">
             <div className="space-y-2">
               {analysis.relatedFilesWithReasons.map((f, i) => (
-                <div key={i} className="rounded-lg border border-gray-800 bg-gray-950 p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <code className="text-xs text-indigo-300 font-mono flex-1 break-all">{f.path}</code>
+                <div key={i} className="rounded p-2.5"
+                  style={{ background: 'rgba(13,16,19,0.70)', border: '1px solid rgba(93,99,103,0.18)' }}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <code className="text-xs font-mono flex-1 break-all" style={{ color: '#798186' }}>{f.path}</code>
                     <CopyButton text={f.path} />
                   </div>
                   {f.reason && (
-                    <p className="text-xs text-gray-500 leading-relaxed">{f.reason}</p>
+                    <p className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{f.reason}</p>
                   )}
                 </div>
               ))}
@@ -388,39 +439,43 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           </SectionCard>
         )}
 
-        {/* Row 6: Qué NO se puede afirmar */}
+        {/* No se puede afirmar */}
         {analysis.cannotConclude && analysis.cannotConclude.length > 0 && (
-          <SectionCard title="⚠ Qué no se puede afirmar">
-            <ul className="space-y-1.5">
+          <SectionCard title="no se puede afirmar">
+            <ul className="space-y-1">
               {analysis.cannotConclude.map((item, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
-                  <span className="text-amber-600 flex-shrink-0 mt-0.5">✗</span>
-                  <span className="text-gray-400">{item.replace(/^Que\s/i, 'Que ')}</span>
+                <li key={i} className="flex items-start gap-2">
+                  <span className="text-xs font-mono flex-shrink-0 mt-0.5" style={{ color: '#c9a07a' }}>✗</span>
+                  <span className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{item}</span>
                 </li>
               ))}
             </ul>
           </SectionCard>
         )}
 
-        {/* Row 7: Info del reporte original */}
+        {/* Reporte original colapsable */}
         <details className="group">
-          <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-400 select-none">
-            ▶ Ver reporte original del bug
+          <summary className="text-xs font-mono cursor-pointer select-none transition-colors"
+            style={{ color: '#343d41' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#4b4e55')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#343d41')}>
+            ▶ reporte original
           </summary>
-          <div className="mt-3 rounded-lg border border-gray-800 p-4 space-y-3">
-            {raw.description && <Field label="Descripción" value={raw.description} />}
-            {raw.stepsToReproduce && <Field label="Pasos para reproducir" value={raw.stepsToReproduce} />}
-            {raw.expectedResult && <Field label="Resultado esperado" value={raw.expectedResult} />}
-            {raw.actualResult && <Field label="Resultado actual" value={raw.actualResult} />}
-            {raw.environment && <Field label="Entorno" value={raw.environment} />}
+          <div className="mt-2 rounded p-3 space-y-2"
+            style={{ border: '1px solid rgba(93,99,103,0.18)', background: 'transparent' }}>
+            {raw.description && <Field label="descripción" value={raw.description} />}
+            {raw.stepsToReproduce && <Field label="pasos para reproducir" value={raw.stepsToReproduce} />}
+            {raw.expectedResult && <Field label="resultado esperado" value={raw.expectedResult} />}
+            {raw.actualResult && <Field label="resultado actual" value={raw.actualResult} />}
+            {raw.environment && <Field label="entorno" value={raw.environment} />}
             {enriched.googleDocs.length > 0 && (
               <div>
-                <div className="text-xs text-gray-600 uppercase tracking-wider mb-1">Documentos</div>
+                <div className="label">documentos</div>
                 {enriched.googleDocs.map((doc, i) => (
-                  <div key={i} className="text-xs">
+                  <div key={i} className="text-xs font-mono">
                     {doc.accessible
-                      ? <span className="text-green-400">✓ {doc.title}</span>
-                      : <span className="text-red-400">✗ {doc.url} — {doc.error}</span>}
+                      ? <span style={{ color: '#9fa5a9' }}>✓ {doc.title}</span>
+                      : <span style={{ color: '#de6145' }}>✗ {doc.url} — {doc.error}</span>}
                   </div>
                 ))}
               </div>
@@ -428,23 +483,24 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           </div>
         </details>
 
-        {/* Error */}
         {result.error && (
-          <div className="bg-red-950/50 border border-red-800 rounded-lg p-3">
-            <div className="text-xs text-red-400 font-medium mb-1">Error durante el análisis</div>
-            <div className="text-xs text-red-300">{result.error}</div>
+          <div className="rounded p-3" style={{ background: 'rgba(222,97,69,0.08)', border: '1px solid rgba(222,97,69,0.22)' }}>
+            <div className="text-xs font-mono mb-1" style={{ color: '#de6145' }}>error durante el análisis</div>
+            <div className="text-xs font-mono" style={{ color: '#c9a07a' }}>{result.error}</div>
           </div>
         )}
       </div>
 
-      {/* Code fragments — full width al pie */}
+      {/* Fragmentos de código al pie */}
       {enriched.codeFragments.length > 0 && (
-        <div className="border-t border-gray-800 px-6 py-5">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            💻 Código fuente encontrado en el repo
-            <span className="ml-2 text-gray-700 font-normal">({enriched.codeFragments.length} fragmento{enriched.codeFragments.length > 1 ? 's' : ''})</span>
+        <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
+          <div className="section-label mb-3">
+            código fuente
+            <span className="ml-2 normal-case" style={{ color: '#343d41', letterSpacing: '0' }}>
+              ({enriched.codeFragments.length} fragmento{enriched.codeFragments.length > 1 ? 's' : ''})
+            </span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             {enriched.codeFragments.map((frag, i) => (
               <CodeBlock key={i} {...frag} />
             ))}
@@ -462,37 +518,45 @@ function DocImageGallery({ images }: { images: DocImage[] }) {
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {images.map((img, i) => (
           <button
             key={i}
             onClick={() => setLightbox(img)}
-            className="group relative border border-gray-700 rounded-lg overflow-hidden hover:border-indigo-500 transition-colors bg-gray-900"
+            className="group relative rounded overflow-hidden transition-colors"
+            style={{ border: '1px solid rgba(93,99,103,0.25)', background: '#141719' }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(121,129,134,0.50)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(93,99,103,0.25)')}
           >
             <img
               src={`data:${img.mimeType};base64,${img.data}`}
               alt={img.alt || `Imagen ${i + 1}`}
-              className="h-20 w-auto max-w-[140px] object-contain"
+              className="h-16 w-auto max-w-[120px] object-contain"
             />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end justify-center pb-1 opacity-0 group-hover:opacity-100">
-              <span className="text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">🔍</span>
-            </div>
           </button>
         ))}
       </div>
 
       {lightbox && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(16,19,21,0.92)' }}
+          onClick={() => setLightbox(null)}>
           <div className="relative max-w-5xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <img
               src={`data:${lightbox.mimeType};base64,${lightbox.data}`}
               alt={lightbox.alt || 'Imagen del documento'}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              className="max-w-full max-h-[85vh] object-contain rounded"
+              style={{ border: '1px solid rgba(93,99,103,0.30)' }}
             />
-            {lightbox.alt && <div className="mt-2 text-center text-sm text-gray-400">{lightbox.alt}</div>}
+            {lightbox.alt && (
+              <div className="mt-2 text-center text-xs font-mono" style={{ color: '#4b4e55' }}>{lightbox.alt}</div>
+            )}
             <button
               onClick={() => setLightbox(null)}
-              className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm flex items-center justify-center"
+              className="absolute -top-2 -right-2 w-6 h-6 rounded flex items-center justify-center text-xs font-mono transition-colors"
+              style={{ background: '#1c2124', border: '1px solid rgba(93,99,103,0.35)', color: '#798186' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#cacccc')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#798186')}
             >✕</button>
           </div>
         </div>
