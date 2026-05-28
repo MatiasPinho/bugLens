@@ -127,6 +127,36 @@ export default function App() {
     }
   }, [excelPath, results, addLog])
 
+  // Deep analysis bajo demanda: marca el bug como 'deep_pending',
+  // dispara el IPC, y reemplaza el análisis cuando vuelve.
+  const handleDeepAnalysis = useCallback(async (bug: AnalyzedBug) => {
+    const bugId = bug.enriched.raw.id
+
+    setResults((prev) => prev.map((r) =>
+      r.enriched.raw.id === bugId
+        ? { ...r, analysis: { ...r.analysis, analysisStatus: 'deep_pending' as const } }
+        : r
+    ))
+    addLog('info', `deep analysis iniciado: ${bug.enriched.raw.title}`)
+
+    const result = await window.electronAPI.deepAnalysis(bug)
+
+    if (result.ok && result.result) {
+      setResults((prev) => prev.map((r) =>
+        r.enriched.raw.id === bugId ? result.result! : r
+      ))
+      addLog('info', `deep analysis completo: ${bug.enriched.raw.title}`)
+    } else {
+      // Revertir al estado fast_completed en error
+      setResults((prev) => prev.map((r) =>
+        r.enriched.raw.id === bugId
+          ? { ...r, analysis: { ...r.analysis, analysisStatus: 'fast_completed' as const } }
+          : r
+      ))
+      addLog('error', `deep analysis falló: ${result.error}`)
+    }
+  }, [addLog])
+
   const handleReset = useCallback(() => {
     setPhase('idle')
     setExcelPath(null)
@@ -270,7 +300,7 @@ export default function App() {
               {results.length > 0 ? (
                 <div className="flex flex-col h-full">
                   <div className="flex-1 overflow-hidden">
-                    <BugTable results={results} analyzing={phase === 'analyzing'} />
+                    <BugTable results={results} analyzing={phase === 'analyzing'} onDeepAnalysis={handleDeepAnalysis} />
                   </div>
                   {showLogs && (
                     <div className="h-40 flex-shrink-0 border-t border-om-border/20">

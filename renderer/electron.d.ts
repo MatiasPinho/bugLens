@@ -32,6 +32,7 @@ interface ElectronAPI {
 
   // Analysis
   runAnalysis(excelPath: string): Promise<{ ok: boolean; count?: number; error?: string }>
+  deepAnalysis(bug: AnalyzedBug): Promise<{ ok: boolean; result?: AnalyzedBug; error?: string }>
   exportExcel(
     originalPath: string,
     results: AnalyzedBug[]

@@ -4,6 +4,7 @@ import type { AnalyzedBug, BugCategory, Severity, DocImage, EvidenceSource } fro
 interface Props {
   results: AnalyzedBug[]
   analyzing?: boolean
+  onDeepAnalysis?: (bug: AnalyzedBug) => void
 }
 
 const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
@@ -180,7 +181,7 @@ function CodeBlock({ filePath, startLine, content, score }: {
 
 // ─── BugTable ─────────────────────────────────────────────────────────────────
 
-export default function BugTable({ results, analyzing = false }: Props) {
+export default function BugTable({ results, analyzing = false, onDeepAnalysis }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filterCategory, setFilterCategory] = useState<BugCategory | 'all'>('all')
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all')
@@ -321,7 +322,7 @@ export default function BugTable({ results, analyzing = false }: Props) {
                   {isExpanded && (
                     <tr>
                       <td colSpan={7} className="p-0">
-                        <ExpandedDetail result={r} />
+                        <ExpandedDetail result={r} onDeepAnalysis={onDeepAnalysis} />
                       </td>
                     </tr>
                   )}
@@ -361,13 +362,17 @@ export default function BugTable({ results, analyzing = false }: Props) {
 
 // ─── Expanded detail ──────────────────────────────────────────────────────────
 
-function ExpandedDetail({ result }: { result: AnalyzedBug }) {
+function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDeepAnalysis?: (bug: AnalyzedBug) => void }) {
   const { enriched, analysis } = result
   const raw = enriched.raw
   const diff = difficultyStyle[analysis.difficulty] ?? difficultyStyle['medium']
   const sv   = severityStyle[analysis.severity]
   const ct   = categoryStyle[analysis.category]
   const allImages = enriched.googleDocs.flatMap((d) => d.images ?? [])
+
+  const status = analysis.analysisStatus ?? 'deep_completed'  // legacy: análisis viejos sin status se asumen deep
+  const isFast    = status === 'fast_completed'
+  const isPending = status === 'deep_pending'
 
   return (
     <div style={{ borderTop: '1px solid rgba(93,99,103,0.20)' }}>
@@ -391,6 +396,18 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
         </div>
       </div>
 
+      {/* Vista compacta para fast triage: resumen + candidateFiles + botón */}
+      {isFast && (
+        <FastTriageView result={result} onDeepAnalysis={onDeepAnalysis} />
+      )}
+
+      {/* Loader para deep_pending */}
+      {isPending && (
+        <DeepPendingView />
+      )}
+
+      {/* Vista completa para deep_completed y failed */}
+      {!isFast && !isPending && (
       <div className="p-5 space-y-3" style={{ background: 'rgba(16,19,21,0.70)' }}>
 
         {/* 1. DESCRIPCIÓN DEL PROBLEMA — arriba de todo */}
@@ -669,9 +686,10 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           </div>
         )}
       </div>
+      )}
 
       {/* Fragmentos de código al pie */}
-      {enriched.codeFragments.length > 0 && (
+      {!isFast && !isPending && enriched.codeFragments.length > 0 && (
         <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
           <div className="section-label mb-3">
             código fuente
@@ -686,6 +704,146 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Fast triage view ─────────────────────────────────────────────────────────
+// Vista compacta del fast triage: clasificación corta + archivos candidatos
+// + botón para promover a deep analysis. El usuario decide qué bugs profundizar.
+
+function FastTriageView({ result, onDeepAnalysis }: { result: AnalyzedBug; onDeepAnalysis?: (bug: AnalyzedBug) => void }) {
+  const { enriched, analysis } = result
+  const raw = enriched.raw
+  const candidates = analysis.candidateFiles ?? analysis.relatedFiles ?? []
+
+  return (
+    <div className="p-5 space-y-3" style={{ background: 'rgba(16,19,21,0.70)' }}>
+      <SectionCard title="triage rápido" accent>
+        <div className="space-y-2">
+          <div>
+            <div className="label">resumen</div>
+            <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{analysis.summary}</p>
+          </div>
+          {analysis.affectedArea && (
+            <div>
+              <div className="label">área</div>
+              <code className="text-xs font-mono break-all" style={{ color: '#798186' }}>{analysis.affectedArea}</code>
+            </div>
+          )}
+          {analysis.oneLineReason && (
+            <div>
+              <div className="label">por qué esta categoría</div>
+              <p className="text-xs leading-relaxed" style={{ color: '#798186' }}>{analysis.oneLineReason}</p>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {candidates.length > 0 && (
+        <SectionCard title={`archivos candidatos (${candidates.length}) — búsqueda local`}>
+          <ul className="space-y-1">
+            {candidates.map((path, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <span className="text-xs flex-shrink-0" style={{ color: '#343d41' }}>›</span>
+                <code className="text-xs font-mono flex-1 break-all" style={{ color: '#798186' }}>{path}</code>
+                <CopyButton text={path} />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+
+      {/* Resumen de fuentes disponibles */}
+      <div className="flex items-center gap-2 text-xs font-mono" style={{ color: '#4b4e55' }}>
+        <span>fuentes:</span>
+        <span style={{ color: '#798186' }}>excel</span>
+        {enriched.googleDocs.filter((d) => d.accessible).length > 0 && (
+          <>
+            <span>·</span>
+            <span style={{ color: '#c9c2b4' }}>
+              {enriched.googleDocs.filter((d) => d.accessible).length} doc(s)
+            </span>
+          </>
+        )}
+        {enriched.googleDocs.some((d) => (d.images?.length ?? 0) > 0) && (
+          <>
+            <span>·</span>
+            <span style={{ color: '#aeaeae' }}>
+              {enriched.googleDocs.reduce((a, d) => a + (d.images?.length ?? 0), 0)} captura(s) no procesadas
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* CTA principal: generar análisis profundo */}
+      {onDeepAnalysis && (
+        <button
+          onClick={() => onDeepAnalysis(result)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded transition-colors cursor-pointer"
+          style={{
+            background: 'rgba(201,194,180,0.08)',
+            border: '1px solid rgba(201,194,180,0.30)',
+            color: '#c9c2b4',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(201,194,180,0.14)'
+            e.currentTarget.style.borderColor = 'rgba(201,194,180,0.50)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'rgba(201,194,180,0.08)'
+            e.currentTarget.style.borderColor = 'rgba(201,194,180,0.30)'
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <span className="text-xs font-mono">generar análisis profundo</span>
+        </button>
+      )}
+
+      {/* Datos originales en colapsable */}
+      <details className="group">
+        <summary className="text-xs font-mono cursor-pointer select-none transition-colors flex items-center gap-1.5"
+          style={{ color: '#4b4e55', listStyle: 'none' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#4b4e55')}>
+          <svg width="7" height="7" viewBox="0 0 8 8" fill="currentColor" className="group-open:rotate-90 transition-transform">
+            <path d="M2 1l4 3-4 3V1z"/>
+          </svg>
+          datos originales del reporte
+        </summary>
+        <div className="mt-2 rounded p-3 space-y-2"
+          style={{ border: '1px solid rgba(93,99,103,0.18)', background: 'transparent' }}>
+          {raw.description && <Field label="descripción" value={raw.description} />}
+          {Object.entries(raw.rawRow).filter(([, v]) => v?.trim()).map(([k, v]) => (
+            <Field key={k} label={k.toLowerCase()} value={v} />
+          ))}
+        </div>
+      </details>
+    </div>
+  )
+}
+
+// ─── Deep analysis pending view ───────────────────────────────────────────────
+
+function DeepPendingView() {
+  return (
+    <div className="p-8" style={{ background: 'rgba(16,19,21,0.70)' }}>
+      <div className="flex flex-col items-center justify-center gap-4 py-12">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#c9c2b4' }} />
+          <span className="text-xs font-mono" style={{ color: '#c9c2b4' }}>análisis profundo en proceso</span>
+        </div>
+        <p className="text-xs font-mono text-center max-w-md leading-relaxed" style={{ color: '#4b4e55' }}>
+          el agente está navegando el código fuente, leyendo archivos relevantes,
+          y construyendo el análisis estructurado. tarda ~2-4 minutos por bug.
+        </p>
+        <p className="text-xs font-mono" style={{ color: '#343d41' }}>
+          podés seguir trabajando — esto corre en background
+        </p>
+      </div>
     </div>
   )
 }
