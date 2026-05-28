@@ -218,11 +218,14 @@ export interface AppConfig {
 
 // ─── IPC messages ─────────────────────────────────────────────────────────────
 
+export type AnalysisPhase = 'reading_excel' | 'reading_docs' | 'fast_triage' | 'done' | 'error'
+
 export interface ProgressEvent {
   type: 'progress'
   message: string
   current: number
   total: number
+  phase?: AnalysisPhase
 }
 
 export interface LogEvent {

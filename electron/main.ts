@@ -241,6 +241,7 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
   const start = Date.now()
 
   try {
+    sendToRenderer('progress', { type: 'progress', phase: 'reading_excel', message: 'leyendo Excel...', current: 0, total: 0 })
     log('info', `Leyendo Excel: ${excelPath}`)
     const bugs = readExcel(excelPath)
     log('info', `Encontrados ${bugs.length} bugs`)
@@ -343,6 +344,7 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
         })
         sendToRenderer('progress', {
           type: 'progress',
+          phase: 'fast_triage',
           message: `${completed}/${bugs.length} analizados — ${bug.title}`,
           current: completed,
           total: bugs.length,
@@ -392,11 +394,12 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
       }
     }
 
-    sendToRenderer('progress', { type: 'progress', message: `Iniciando análisis de ${bugs.length} bugs...`, current: 0, total: bugs.length })
+    sendToRenderer('progress', { type: 'progress', phase: 'fast_triage', message: `iniciando triage rápido (${bugs.length} bugs, x${concurrency})`, current: 0, total: bugs.length })
     await Promise.all(Array.from({ length: Math.min(concurrency, bugs.length) }, worker))
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1)
     log('info', `Análisis completado en ${elapsed}s (${(bugs.length / parseFloat(elapsed)).toFixed(1)} bugs/s)`)
+    sendToRenderer('progress', { type: 'progress', phase: 'done', message: `completado en ${elapsed}s`, current: bugs.length, total: bugs.length })
     sendToRenderer('analysis-complete', { type: 'complete', results: results.filter(Boolean) })
 
     // Cerrar el contexto headless del browser reader para liberar recursos

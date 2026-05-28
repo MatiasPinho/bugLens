@@ -23,7 +23,7 @@ export default function App() {
   const [excelPath, setExcelPath] = useState<string | null>(null)
   const [results, setResults] = useState<AnalyzedBug[]>([])
   const [logs, setLogs] = useState<LogLine[]>([])
-  const [progress, setProgress] = useState({ current: 0, total: 0, message: '' })
+  const [progress, setProgress] = useState<{ current: number; total: number; message: string; phase?: import('../src/types/index').AnalysisPhase }>({ current: 0, total: 0, message: '' })
   const [indexProgress, setIndexProgress] = useState({ filesProcessed: 0, totalFiles: 0, message: '' })
   const [isIndexing, setIsIndexing] = useState(false)
   const [hasIndex, setHasIndex] = useState(false)
@@ -42,7 +42,7 @@ export default function App() {
     const cleanProgress = api.onProgress((ev: IPCEvent) => {
       if (ev.type !== 'progress') return
       const e = ev as ProgressEvent
-      setProgress({ current: e.current, total: e.total, message: e.message })
+      setProgress({ current: e.current, total: e.total, message: e.message, phase: e.phase })
     })
 
     const cleanLog = api.onLog((ev: IPCEvent) => {
@@ -229,6 +229,17 @@ export default function App() {
 
               {phase === 'analyzing' && (
                 <div className="card">
+                  {progress.phase && (
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-xs font-mono uppercase tracking-wider" style={{ color: '#c9c2b4' }}>
+                        {progress.phase === 'reading_excel' ? 'leyendo excel'
+                          : progress.phase === 'reading_docs' ? 'leyendo docs'
+                          : progress.phase === 'fast_triage' ? 'triage rápido'
+                          : progress.phase === 'done' ? 'completado'
+                          : 'error'}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 mb-2.5">
                     <span className="w-1.5 h-1.5 bg-om-cream rounded-full animate-pulse flex-shrink-0" />
                     <span className="text-xs text-om-fgmuted flex-1 truncate font-mono">{progress.message}</span>
