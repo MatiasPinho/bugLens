@@ -112,6 +112,29 @@ export interface StructuredCause {
   risk: string                              // qué podría estar mal o falta validar
 }
 
+// Estado del análisis para distinguir fast triage de deep analysis.
+// El batch siempre arranca con 'fast_completed' y se promueve a 'deep_completed'
+// cuando el usuario pide análisis profundo del bug específico.
+export type AnalysisStatus = 'fast_completed' | 'deep_pending' | 'deep_completed' | 'failed'
+
+// Salida del fast triage — campos mínimos para llenar la tabla principal.
+// Subset de BugAnalysis: el deep analysis lo extiende sin perder estos campos.
+export interface BugTriage {
+  category: BugCategory
+  severity: Severity
+  difficulty: Difficulty
+  confidence: number                        // 0–1
+  bugType?: string
+
+  summary: string                           // 1 oración, qué está roto
+  affectedArea: string                      // componente / función / módulo
+  oneLineReason: string                     // por qué esta categoría, una sola oración
+  candidateFiles: string[]                  // top N archivos candidatos (búsqueda local sin LLM)
+
+  needsMoreInfo: boolean
+  rawResponse: string
+}
+
 export interface BugAnalysis {
   category: BugCategory
   severity: Severity
@@ -119,8 +142,12 @@ export interface BugAnalysis {
   confidence: number                        // 0–1
   bugType?: string                          // ui | validation | routing | permissions | api | …
 
+  analysisStatus: AnalysisStatus            // fast_completed | deep_pending | deep_completed | failed
+
   summary: string                           // 1 oración, qué está roto
   affectedArea: string                      // componente / función / módulo específico
+  oneLineReason?: string                    // razón corta usada en fast triage
+  candidateFiles?: string[]                 // candidatos del fast triage (sin LLM)
 
   problemDescription?: ProblemDescription   // qué se reportó (≠ qué creemos que pasa)
   functionalImpact?: string                 // a qué afecta funcionalmente

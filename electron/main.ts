@@ -16,6 +16,7 @@ import { BrowserDocsReader } from '../src/pipeline/browserDocsReader.js'
 import { RepoIndexer } from '../src/pipeline/repoIndexer.js'
 import { BugEnricher } from '../src/pipeline/bugEnricher.js'
 import { analyzeBug, getLLMConfig } from '../src/llm/client.js'
+import { fastTriage, triageToAnalysis } from '../src/llm/fastTriage.js'
 import type { AnalyzedBug, LLMConfig } from '../src/types/index.js'
 
 // ─── Simple JSON config store ─────────────────────────────────────────────────
@@ -278,11 +279,12 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
     // Concurrency per provider:
     // - Cloud APIs: run 5 bugs in parallel (rate limits allow it, huge speedup)
     // - Ollama: 2 concurrent (queues internally anyway, but avoids head-of-line blocking)
+    // Fast triage usa output corto (~512 tokens) — soporta más concurrencia.
     const CONCURRENCY: Record<string, number> = {
-      anthropic: 5,
-      openai:    5,
-      gemini:    2,  // free tier: 5 RPM — stay well under
-      ollama:    2,
+      anthropic: 8,
+      openai:    8,
+      gemini:    3,
+      ollama:    3,  // 3 instancias x ~4.5GB = compartido en GPU, queueing interno de Ollama
     }
     const concurrency = CONCURRENCY[llmConfig.provider] ?? 2
 
@@ -315,7 +317,10 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
         }
 
         const repoPaths = [s.frontendRepoPath, s.backendRepoPath].filter(Boolean)
-        const analysis = await analyzeBug(enriched, llmConfig, repoPaths, (msg) => log('info', msg))
+        // FAST TRIAGE: clasificación rápida sin agent loop, sin imágenes.
+        // El deep analysis se ejecuta bajo demanda desde la UI (IPC analyze:deep).
+        const triage = await fastTriage(enriched, llmConfig, repoPaths)
+        const analysis = triageToAnalysis(triage)
         const result: AnalyzedBug = { enriched, analysis, processingMs: Date.now() - bugStart }
 
         results[i] = result
@@ -346,6 +351,7 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
             severity: 'low',
             difficulty: 'low',
             confidence: 0,
+            analysisStatus: 'failed',
             summary: 'Error durante el análisis',
             affectedArea: '',
             classificationReason: '',
@@ -396,6 +402,43 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log('error', `Error general: ${message}`)
+    return { ok: false, error: message }
+  }
+})
+
+// ─── IPC: Deep analysis on-demand ─────────────────────────────────────────────
+// Recibe un AnalyzedBug del UI (el fast triage ya tiene enriched.raw + googleDocs)
+// y le agrega el análisis profundo con el agent loop completo.
+
+ipcMain.handle('analyze:deep', async (_e, { bug }: { bug: AnalyzedBug }) => {
+  const start = Date.now()
+  try {
+    const s = loadSettings()
+    const llmConfig: LLMConfig = getLLMConfig({
+      provider: s.llmProvider as LLMConfig['provider'],
+      model: s.llmModel,
+      baseUrl: s.ollamaBaseUrl,
+    })
+
+    log('info', `Deep analysis: ${bug.enriched.raw.title}`)
+
+    const repoPaths = [s.frontendRepoPath, s.backendRepoPath].filter(Boolean)
+    const analysis = await analyzeBug(
+      bug.enriched, llmConfig, repoPaths,
+      (msg) => log('info', msg)
+    )
+
+    const result: AnalyzedBug = {
+      enriched: bug.enriched,
+      analysis,
+      processingMs: Date.now() - start,
+    }
+
+    log('info', `✓ Deep analysis completado en ${((Date.now() - start) / 1000).toFixed(1)}s`)
+    return { ok: true, result }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', `Deep analysis falló: ${message}`)
     return { ok: false, error: message }
   }
 })

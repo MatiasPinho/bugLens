@@ -395,6 +395,8 @@ function validateAnalysis(obj: unknown): BugAnalysis {
     confidence,
     bugType: o['bugType'] ? String(o['bugType']) : undefined,
 
+    analysisStatus: 'deep_completed',
+
     summary: String(o['summary'] ?? ''),
     affectedArea: String(o['affectedArea'] ?? ''),
 
@@ -483,6 +485,7 @@ export async function analyzeBug(
     severity: 'low',
     difficulty: 'low',
     confidence: 0,
+    analysisStatus: 'failed',
     summary: 'No se pudo analizar este bug',
     affectedArea: '',
     classificationReason: '',
@@ -498,3 +501,6 @@ export async function analyzeBug(
     rawResponse: lastError?.message ?? '',
   }
 }
+
+// Alias semántico: el batch usa fastTriage(), bajo demanda usa deepAnalysis()
+export { analyzeBug as deepAnalysis }
