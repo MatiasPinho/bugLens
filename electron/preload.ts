@@ -26,6 +26,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Analysis
   runAnalysis: (excelPath: string) => ipcRenderer.invoke('analyze:run', excelPath),
   deepAnalysis: (bug: AnalyzedBug) => ipcRenderer.invoke('analyze:deep', { bug }),
+
+  // Cache
+  cacheStats: () => ipcRenderer.invoke('cache:stats'),
+  clearCache: () => ipcRenderer.invoke('cache:clear'),
   exportExcel: (originalPath: string, results: AnalyzedBug[]) =>
     ipcRenderer.invoke('export:excel', { originalPath, results }),
 

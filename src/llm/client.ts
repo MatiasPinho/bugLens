@@ -1,5 +1,6 @@
 import { LLMConfig, LLMProvider, BugAnalysis } from '../types/index.js'
 import { SYSTEM_PROMPT_OLLAMA, buildUserPrompt } from '../prompts/bugClassifier.js'
+import { makeCacheKey, loadCachedAnalysis, saveCachedAnalysis } from './analysisCache.js'
 
 // Single unified system prompt — same expectations for local and cloud models.
 // Cloud LLMs handle the schema fine; local models need the structure to be explicit.
@@ -438,8 +439,21 @@ export async function analyzeBug(
   enriched:  EnrichedBug,
   config:    LLMConfig,
   repoPaths: string[]    = [],
-  sendLog?:  (msg: string) => void
+  sendLog?:  (msg: string) => void,
+  cacheDir?: string,
 ): Promise<BugAnalysis> {
+  // Cache check (deep analysis): si el bug + docs + modelo + prompt version no cambiaron,
+  // devolvemos el análisis cacheado. La inversión vale la pena para el deep porque
+  // cada uno tarda 2-4 min.
+  const cacheKey = cacheDir ? makeCacheKey(enriched, config, 'deep') : null
+  if (cacheKey && cacheDir) {
+    const cached = loadCachedAnalysis(cacheKey, cacheDir)
+    if (cached) {
+      sendLog?.('  ✓ deep analysis desde cache')
+      return cached
+    }
+  }
+
   // Phase 1: agentic investigation — LLM navigates the repo with tools
   let gatheredCode = ''
   if (repoPaths.filter(Boolean).length > 0) {
@@ -468,6 +482,7 @@ export async function analyzeBug(
       const jsonStr = extractJSON(raw)
       const parsed = JSON.parse(jsonStr) as unknown
       const analysis = validateAnalysis(parsed)
+      if (cacheKey && cacheDir) saveCachedAnalysis(cacheKey, cacheDir, analysis)
       return analysis
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))

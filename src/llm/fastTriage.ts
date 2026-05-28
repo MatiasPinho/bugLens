@@ -15,6 +15,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
 import type { LLMConfig, EnrichedBug, BugTriage, BugAnalysis } from '../types/index.js'
+import { makeCacheKey, loadCachedTriage, saveCachedTriage } from './analysisCache.js'
 
 // ─── Prompt minimal ──────────────────────────────────────────────────────────
 
@@ -341,26 +342,45 @@ export function triageToAnalysis(t: BugTriage): BugAnalysis {
 /**
  * Punto de entrada principal: clasifica un bug rápidamente.
  * No usa agent loop, no procesa imágenes, no genera campos rich.
+ *
+ * Con cacheDir: verifica cache antes de llamar al LLM. Si nada cambió desde
+ * la última corrida (bug content + docs + model + prompt version), devuelve
+ * el resultado cacheado en ~1ms.
  */
 export async function fastTriage(
   enriched:  EnrichedBug,
   config:    LLMConfig,
   repoPaths: string[]    = [],
-): Promise<BugTriage> {
-  // 1) Búsqueda local de archivos candidatos (sin LLM, ~100ms)
+  cacheDir?: string,
+): Promise<{ triage: BugTriage; fromCache: boolean }> {
+  // 1) Cache lookup (si está habilitado)
+  if (cacheDir) {
+    const key = makeCacheKey(enriched, config, 'fast')
+    const cached = loadCachedTriage(key, cacheDir)
+    if (cached) return { triage: cached, fromCache: true }
+  }
+
+  // 2) Búsqueda local de archivos candidatos (sin LLM, ~100ms)
   const candidateFiles = findCandidateFiles(enriched, repoPaths)
 
-  // 2) Prompt minimal con bug + doc (sin imágenes)
+  // 3) Prompt minimal con bug + doc (sin imágenes)
   const prompt = buildFastTriagePrompt(enriched, candidateFiles)
 
-  // 3) LLM call corta (max 512 tokens output)
+  // 4) LLM call corta (max 512 tokens output)
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const raw = config.provider === 'ollama'
         ? await callOllamaFast(prompt, config)
         : await callCloudFast(prompt, config)
       const parsed = JSON.parse(extractJSON(raw)) as unknown
-      return validateTriage(parsed, candidateFiles, raw)
+      const triage = validateTriage(parsed, candidateFiles, raw)
+
+      // 5) Guardar en cache
+      if (cacheDir) {
+        saveCachedTriage(makeCacheKey(enriched, config, 'fast'), cacheDir, triage)
+      }
+
+      return { triage, fromCache: false }
     } catch (err) {
       if (attempt === 2) throw err
       await new Promise((r) => setTimeout(r, 500))
