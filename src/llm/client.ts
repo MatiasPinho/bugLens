@@ -1,5 +1,5 @@
 import { LLMConfig, LLMProvider, BugAnalysis } from '../types/index.js'
-import { SYSTEM_PROMPT, buildUserPrompt } from '../prompts/bugClassifier.js'
+import { SYSTEM_PROMPT, SYSTEM_PROMPT_OLLAMA, buildUserPrompt } from '../prompts/bugClassifier.js'
 import { EnrichedBug } from '../types/index.js'
 import { runAgentInvestigation } from './agentLoop.js'
 
@@ -26,7 +26,7 @@ function getDefaultModel(provider: LLMProvider): string {
   switch (provider) {
     case 'ollama': return process.env['OLLAMA_MODEL'] ?? 'mistral'
     case 'anthropic': return 'claude-sonnet-4-6'
-    case 'gemini': return 'gemini-1.5-flash'
+    case 'gemini': return 'gemini-2.5-flash'
     case 'openai': return 'gpt-4o-mini'
   }
 }
@@ -71,12 +71,13 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
   const body = {
     model,
     stream: false,
+    format: 'json',  // grammar-constrained JSON — evita JSON malformado/truncado
     options: {
       temperature: config.temperature ?? 0.1,
-      num_predict: config.maxTokens ?? 2048,
+      num_predict: config.maxTokens ?? 4096,
     },
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT_OLLAMA },
       { role: 'user',   content: prompt },
     ],
   }
@@ -154,17 +155,32 @@ async function callGemini(prompt: string, config: LLMConfig): Promise<string> {
   const genAI = new GoogleGenerativeAI(config.apiKey)
 
   const model = genAI.getGenerativeModel({
-    model: config.model ?? 'gemini-1.5-flash',
+    model: config.model ?? 'gemini-2.5-flash',
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
       temperature: config.temperature ?? 0.1,
-      maxOutputTokens: config.maxTokens ?? 2048,
+      maxOutputTokens: config.maxTokens ?? 4096,
+      responseMimeType: 'application/json',
     },
   })
 
-  const result = await model.generateContent(prompt)
-  const text = result.response.text()
-  return text.trim()
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const result = await model.generateContent(prompt)
+      return result.response.text().trim()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if ((msg.includes('429') || msg.includes('Too Many Requests')) && attempt < 4) {
+        const match = msg.match(/"retryDelay":"(\d+)s"/)
+        const waitMs = match ? parseInt(match[1]) * 1000 : attempt * 20_000
+        console.warn(`[gemini] 429 rate limit — esperando ${waitMs / 1000}s (intento ${attempt}/4)`)
+        await new Promise((r) => setTimeout(r, waitMs))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('Gemini: máximo de reintentos alcanzado')
 }
 
 async function callOpenAI(prompt: string, config: LLMConfig): Promise<string> {
@@ -194,25 +210,54 @@ const VALID_CATEGORIES = new Set(['frontend', 'backend', 'database', 'config', '
 const VALID_SEVERITIES = new Set(['low', 'medium', 'high', 'critical'])
 const VALID_DIFFICULTIES = new Set(['low', 'medium', 'high'])
 
+// Escape bare control characters inside JSON string values (Gemini sometimes emits them)
+function sanitizeJSONStrings(text: string): string {
+  let result = ''
+  let inString = false
+  let escaped = false
+  for (const char of text) {
+    if (escaped) { result += char; escaped = false; continue }
+    if (char === '\\' && inString) { result += char; escaped = true; continue }
+    if (char === '"') { result += char; inString = !inString; continue }
+    if (inString) {
+      const code = char.charCodeAt(0)
+      if (char === '\n') { result += '\\n'; continue }
+      if (char === '\r') { result += '\\r'; continue }
+      if (char === '\t') { result += '\\t'; continue }
+      if (code < 0x20) { result += ' '; continue }
+    }
+    result += char
+  }
+  return result
+}
+
 function extractJSON(text: string): string {
-  // Strip markdown code blocks if the LLM added them anyway
   const stripped = text
     .replace(/^```(?:json)?\s*/m, '')
     .replace(/\s*```\s*$/m, '')
     .trim()
-
-  // Find the first complete JSON object
   const start = stripped.indexOf('{')
   const end = stripped.lastIndexOf('}')
-  if (start !== -1 && end !== -1) {
-    return stripped.slice(start, end + 1)
-  }
-  return stripped
+  const json = (start !== -1 && end !== -1) ? stripped.slice(start, end + 1) : stripped
+  return sanitizeJSONStrings(json)
 }
 
 function toStringArray(val: unknown): string[] {
   if (!Array.isArray(val)) return []
   return val.map(String).filter(Boolean)
+}
+
+// qwen2.5 con format:json a veces devuelve probableCause como objeto {OBSERVACIÓN, HIPÓTESIS, CERTEZA}
+function parseProbableCause(val: unknown): string {
+  if (typeof val === 'string') return val
+  if (typeof val === 'object' && val !== null) {
+    const pc = val as Record<string, unknown>
+    return ['OBSERVACIÓN', 'HIPÓTESIS', 'CERTEZA']
+      .filter((k) => pc[k])
+      .map((k) => `${k}: ${pc[k]}`)
+      .join('\n')
+  }
+  return ''
 }
 
 function validateAnalysis(obj: unknown): BugAnalysis {
@@ -279,7 +324,7 @@ function validateAnalysis(obj: unknown): BugAnalysis {
     affectedArea: String(o['affectedArea'] ?? ''),
     classificationReason: String(o['classificationReason'] ?? ''),
     confidenceReason: String(o['confidenceReason'] ?? ''),
-    probableCause: String(o['probableCause'] ?? ''),
+    probableCause: parseProbableCause(o['probableCause']),
     suggestedFixSteps: toStringArray(o['suggestedFixSteps']),
     investigationSteps: toStringArray(o['investigationSteps']),
     evidenceUsed,

@@ -7,7 +7,7 @@ import * as dotenv from 'dotenv'
 // Load .env from project root (dev) or app resources (prod)
 const envPath = app.isPackaged
   ? path.join(process.resourcesPath, '.env')
-  : path.join(__dirname, '..', '.env')
+  : path.join(__dirname, '..', '..', '.env')
 dotenv.config({ path: envPath })
 
 import { readExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
@@ -281,7 +281,7 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
     const CONCURRENCY: Record<string, number> = {
       anthropic: 5,
       openai:    5,
-      gemini:    5,
+      gemini:    2,  // free tier: 5 RPM — stay well under
       ollama:    2,
     }
     const concurrency = CONCURRENCY[llmConfig.provider] ?? 2

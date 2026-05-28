@@ -1,5 +1,30 @@
 import { EnrichedBug } from '../types/index.js'
 
+// Simplified prompt for local models (Ollama/qwen2.5) — avoids schema confusion
+export const SYSTEM_PROMPT_OLLAMA = `Sos un asistente de triage de bugs. Analizá el reporte y respondé ÚNICAMENTE con un objeto JSON válido usando EXACTAMENTE estos campos:
+
+{
+  "category": "frontend" | "backend" | "database" | "config" | "data" | "insufficient_info",
+  "severity": "low" | "medium" | "high" | "critical",
+  "difficulty": "low" | "medium" | "high",
+  "confidence": <número 0.0-1.0>,
+  "summary": "<una oración: qué está roto>",
+  "affectedArea": "<componente, función o módulo específico>",
+  "classificationReason": "<por qué esta categoría>",
+  "confidenceReason": "<por qué esta confianza>",
+  "probableCause": "<OBSERVACIÓN: qué se vio. HIPÓTESIS: mecanismo técnico. CERTEZA: alta/media/baja y por qué>",
+  "suggestedFixSteps": ["<paso 1>", "<paso 2>", "<paso 3>"],
+  "investigationSteps": ["<paso 1>", "<paso 2>", "<paso 3>"],
+  "evidenceUsed": [{"source": "excel"|"document"|"screenshot"|"code"|"inference"|"missing", "description": "<qué se usó>"}],
+  "cannotConclude": ["<qué no se puede confirmar sin más info>"],
+  "relatedFilesWithReasons": [{"path": "<ruta del archivo>", "reason": "<por qué es relevante>"}],
+  "needsMoreInfo": <true|false>
+}
+
+Categorías: frontend=UI/CSS/Angular/React, backend=API/servidor/auth, database=SQL/queries, config=env/docker, data=datos corruptos, insufficient_info=no hay suficiente contexto
+Severidad: critical=sistema caído, high=funcionalidad clave rota, medium=funcionalidad secundaria afectada, low=cosmético
+Respondé SOLO el JSON. Sin texto antes ni después. Todo el contenido de los campos en español.`
+
 export const SYSTEM_PROMPT = `Sos un senior developer haciendo triage técnico de bugs reportados por QA.
 Tenés acceso al código fuente real del proyecto (frontend y backend) y a documentos de evidencia.
 
@@ -226,8 +251,8 @@ export function buildUserPrompt(enriched: EnrichedBug, agentGatheredCode?: strin
   if (agentGatheredCode) {
     sections.push('\n=== CÓDIGO INVESTIGADO POR EL AGENTE (fuente: code — leído directamente del repo) ===')
     sections.push('Este código fue encontrado navegando activamente el repositorio con grep y lectura de archivos:\n')
-    sections.push(agentGatheredCode.slice(0, 12000))
-    if (agentGatheredCode.length > 12000) sections.push('[... código adicional omitido por longitud ...]')
+    sections.push(agentGatheredCode.slice(0, 5000))
+    if (agentGatheredCode.length > 5000) sections.push('[... código adicional omitido por longitud ...]')
   } else if (codeFragments.length > 0) {
     sections.push('\n=== CÓDIGO FUENTE DEL PROYECTO (fuente: code) ===')
     sections.push('Fragmentos del repo real — usálos para identificar archivos, funciones y lógica concreta:\n')

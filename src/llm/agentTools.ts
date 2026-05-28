@@ -93,16 +93,30 @@ export const TOOL_DEFINITIONS: ToolDef[] = [
 // ─── Security: resolve and validate paths ────────────────────────────────────
 
 export function resolveRepoPath(inputPath: string, repoPaths: string[]): string | null {
+  const cleaned = inputPath.replace(/^\/+/, '')
+
   for (const root of repoPaths) {
-    const candidates = [
-      path.resolve(root, inputPath.replace(/^\/+/, '')),
-      path.resolve(inputPath),
+    // Try direct resolution and absolute path
+    const direct = [
+      path.resolve(root, cleaned),
+      path.resolve(cleaned),
     ]
-    for (const candidate of candidates) {
+    for (const candidate of direct) {
       const norm = path.normalize(candidate)
       const withinRepo = repoPaths.some((r) => norm.startsWith(path.normalize(r)))
       if (withinRepo && fs.existsSync(norm)) return norm
     }
+
+    // Try one level of subdirectory prefix — handles repos where sources live in
+    // a subdirectory (e.g., the agent says "src/..." but the file is "source/src/...")
+    try {
+      const entries = fs.readdirSync(root, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue
+        const candidate = path.resolve(root, entry.name, cleaned)
+        if (fs.existsSync(candidate)) return candidate
+      }
+    } catch { /* skip */ }
   }
   return null
 }
@@ -155,7 +169,7 @@ function execReadFile(
   try {
     const all   = fs.readFileSync(resolved, 'utf8').split('\n')
     const start = Math.max(0, (startLine ?? 1) - 1)
-    const end   = Math.min(start + 150, endLine ? endLine : start + 150, all.length)
+    const end   = Math.min(start + 80, endLine ? endLine : start + 80, all.length)
 
     const relPath = repoPaths.reduce((p, r) => p.replace(r + path.sep, ''), resolved)
     const header  = `// ${relPath} (líneas ${start + 1}–${end} de ${all.length})\n`

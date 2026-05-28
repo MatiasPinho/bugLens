@@ -55,11 +55,11 @@ function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100)
   const color = pct >= 80 ? '#9fa5a9' : pct >= 50 ? '#c9c2b4' : '#de6145'
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-14 rounded-full h-0.5" style={{ background: 'rgba(75,78,85,0.50)' }}>
-        <div className="h-0.5 rounded-full" style={{ width: `${pct}%`, background: color }} />
+    <div className="flex items-center gap-2">
+      <div className="w-20 rounded-full h-1" style={{ background: 'rgba(75,78,85,0.40)' }}>
+        <div className="h-1 rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>{pct}%</span>
+      <span className="text-xs font-mono w-8 text-right" style={{ color: '#5d6367' }}>{pct}%</span>
     </div>
   )
 }
@@ -69,14 +69,21 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
-      className="text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0 transition-colors"
+      className="flex-shrink-0 transition-colors cursor-pointer"
+      title="copiar"
       style={{
         color: copied ? '#9fa5a9' : '#4b4e55',
-        border: '1px solid rgba(93,99,103,0.25)',
+        border: `1px solid ${copied ? 'rgba(159,165,169,0.35)' : 'rgba(93,99,103,0.25)'}`,
         background: 'transparent',
+        borderRadius: '4px',
+        padding: '0.2rem 0.4rem',
+        fontSize: '0.65rem',
+        fontFamily: 'inherit',
       }}
+      onMouseEnter={e => { if (!copied) e.currentTarget.style.color = '#798186' }}
+      onMouseLeave={e => { if (!copied) e.currentTarget.style.color = '#4b4e55' }}
     >
-      {copied ? '✓' : '⧉'}
+      {copied ? '✓' : 'copy'}
     </button>
   )
 }
@@ -186,45 +193,69 @@ export default function BugTable({ results, analyzing = false }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Filter bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b flex-wrap flex-shrink-0"
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b flex-wrap flex-shrink-0"
         style={{ borderColor: 'rgba(93,99,103,0.20)', background: '#101315' }}>
-        <input
-          type="text" placeholder="buscar..."
-          value={search} onChange={(e) => setSearch(e.target.value)}
-          className="input text-xs w-44"
-        />
+        <div className="relative">
+          <svg className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none"
+            width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ color: '#4b4e55' }}>
+            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text" placeholder="buscar bugs..."
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            className="input text-xs w-44"
+            style={{ paddingLeft: '1.5rem' }}
+          />
+        </div>
         <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as BugCategory | 'all')}
-          className="input text-xs w-32">
+          className="input text-xs w-32 cursor-pointer">
           <option value="all">categoría</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value as Severity | 'all')}
-          className="input text-xs w-32">
+          className="input text-xs w-32 cursor-pointer">
           <option value="all">severidad</option>
           {severities.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span className="text-xs font-mono ml-auto flex items-center gap-2" style={{ color: '#4b4e55' }}>
+        {(search || filterCategory !== 'all' || filterSeverity !== 'all') && (
+          <button
+            onClick={() => { setSearch(''); setFilterCategory('all'); setFilterSeverity('all') }}
+            className="text-xs font-mono transition-colors cursor-pointer"
+            style={{ color: '#4b4e55' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#4b4e55')}
+          >
+            limpiar
+          </button>
+        )}
+        <span className="text-xs font-mono ml-auto flex items-center gap-2.5" style={{ color: '#4b4e55' }}>
           {analyzing && (
-            <span className="flex items-center gap-1" style={{ color: '#798186' }}>
-              <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: '#798186' }} />
+            <span className="flex items-center gap-1.5" style={{ color: '#9fa5a9' }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#c9c2b4' }} />
               analizando
             </span>
           )}
-          {filtered.length}/{results.length}
+          <span>
+            {filtered.length !== results.length
+              ? <><span style={{ color: '#798186' }}>{filtered.length}</span><span style={{ color: '#343d41' }}>/{results.length}</span></>
+              : <span style={{ color: '#4b4e55' }}>{results.length} bugs</span>
+            }
+          </span>
         </span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10" style={{ background: '#101315', borderBottom: '1px solid rgba(93,99,103,0.20)' }}>
-            <tr style={{ color: '#4b4e55' }} className="text-left font-mono uppercase tracking-wider">
+            <tr style={{ color: '#5d6367' }} className="text-left font-mono uppercase tracking-wider">
               <th className="px-4 py-2 font-medium w-8">#</th>
               <th className="px-4 py-2 font-medium">título</th>
               <th className="px-4 py-2 font-medium">área</th>
-              <th className="px-4 py-2 font-medium">cat</th>
-              <th className="px-4 py-2 font-medium">sev</th>
+              <th className="px-4 py-2 font-medium">categoría</th>
+              <th className="px-4 py-2 font-medium">severidad</th>
               <th className="px-4 py-2 font-medium">fix</th>
-              <th className="px-4 py-2 font-medium">conf</th>
+              <th className="px-4 py-2 font-medium">confianza</th>
             </tr>
           </thead>
           <tbody>
@@ -239,12 +270,13 @@ export default function BugTable({ results, analyzing = false }: Props) {
                 <React.Fragment key={id}>
                   <tr
                     onClick={() => setExpandedId(isExpanded ? null : id)}
-                    className="cursor-pointer transition-colors"
+                    className="cursor-pointer"
                     style={{
                       borderBottom: '1px solid rgba(93,99,103,0.12)',
                       background: isExpanded ? '#141719' : 'transparent',
+                      transition: 'background 0.12s',
                     }}
-                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(20,23,25,0.60)' }}
+                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(28,33,36,0.80)' }}
                     onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent' }}
                   >
                     <td className="px-4 py-2.5 font-mono" style={{ color: '#343d41' }}>{r.enriched.raw.rowIndex}</td>
@@ -282,8 +314,26 @@ export default function BugTable({ results, analyzing = false }: Props) {
         </table>
 
         {filtered.length === 0 && (
-          <div className="text-center py-16 font-mono text-xs" style={{ color: '#4b4e55' }}>
-            sin resultados
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{ color: '#343d41' }}>
+              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.2"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+              <line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>
+              {results.length > 0 ? 'sin resultados para estos filtros' : 'sin bugs analizados'}
+            </span>
+            {results.length > 0 && (
+              <button
+                onClick={() => { setSearch(''); setFilterCategory('all'); setFilterSeverity('all') }}
+                className="text-xs font-mono transition-colors cursor-pointer"
+                style={{ color: '#5d6367' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#5d6367')}
+              >
+                limpiar filtros
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -455,11 +505,14 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
 
         {/* Reporte original colapsable */}
         <details className="group">
-          <summary className="text-xs font-mono cursor-pointer select-none transition-colors"
-            style={{ color: '#343d41' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#4b4e55')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#343d41')}>
-            ▶ reporte original
+          <summary className="text-xs font-mono cursor-pointer select-none transition-colors flex items-center gap-1.5"
+            style={{ color: '#4b4e55', listStyle: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#4b4e55')}>
+            <svg width="7" height="7" viewBox="0 0 8 8" fill="currentColor" className="group-open:rotate-90 transition-transform">
+              <path d="M2 1l4 3-4 3V1z"/>
+            </svg>
+            reporte original
           </summary>
           <div className="mt-2 rounded p-3 space-y-2"
             style={{ border: '1px solid rgba(93,99,103,0.18)', background: 'transparent' }}>
@@ -553,11 +606,17 @@ function DocImageGallery({ images }: { images: DocImage[] }) {
             )}
             <button
               onClick={() => setLightbox(null)}
-              className="absolute -top-2 -right-2 w-6 h-6 rounded flex items-center justify-center text-xs font-mono transition-colors"
-              style={{ background: '#1c2124', border: '1px solid rgba(93,99,103,0.35)', color: '#798186' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#cacccc')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#798186')}
-            >✕</button>
+              className="absolute -top-3 -right-3 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              style={{ background: '#1c2124', border: '1px solid rgba(93,99,103,0.45)', color: '#798186' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#cacccc'; e.currentTarget.style.borderColor = 'rgba(121,129,134,0.60)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#798186'; e.currentTarget.style.borderColor = 'rgba(93,99,103,0.45)' }}
+              aria-label="cerrar"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       )}

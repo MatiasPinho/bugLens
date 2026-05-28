@@ -155,7 +155,7 @@ export default function App() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
+              className={`px-3 py-1 rounded text-xs font-mono transition-colors cursor-pointer ${
                 tab === t
                   ? 'bg-om-accent text-om-base font-semibold'
                   : 'text-om-muted hover:text-om-fg hover:bg-om-raised'
@@ -199,14 +199,15 @@ export default function App() {
 
               {phase === 'analyzing' && (
                 <div className="card">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-1.5 h-1.5 bg-om-accent rounded-full animate-pulse flex-shrink-0" />
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="w-1.5 h-1.5 bg-om-cream rounded-full animate-pulse flex-shrink-0" />
                     <span className="text-xs text-om-fgmuted flex-1 truncate font-mono">{progress.message}</span>
                   </div>
-                  <div className="w-full bg-om-dim/40 rounded-full h-0.5">
+                  <div className="w-full rounded-full h-1" style={{ background: 'rgba(75,78,85,0.35)' }}>
                     <div
-                      className="bg-om-accent h-0.5 rounded-full transition-all duration-500"
+                      className="h-1 rounded-full transition-all duration-500"
                       style={{
+                        background: '#c9c2b4',
                         width: progress.total > 0
                           ? `${(progress.current / progress.total) * 100}%`
                           : '5%',
@@ -214,15 +215,30 @@ export default function App() {
                     />
                   </div>
                   {progress.total > 0 && (
-                    <div className="text-xs text-om-muted mt-1.5 font-mono text-right">
-                      {progress.current}/{progress.total}
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-xs font-mono" style={{ color: '#343d41' }}>
+                        {Math.round((progress.current / progress.total) * 100)}%
+                      </span>
+                      <span className="text-xs text-om-muted font-mono">
+                        {progress.current}/{progress.total}
+                      </span>
                     </div>
                   )}
                   <button
                     onClick={() => setShowLogs((v) => !v)}
-                    className="text-xs text-om-muted hover:text-om-fgmuted mt-2 w-full text-left font-mono transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-mono mt-2.5 w-full transition-colors cursor-pointer"
+                    style={{ color: showLogs ? '#798186' : '#4b4e55' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+                    onMouseLeave={e => (e.currentTarget.style.color = showLogs ? '#798186' : '#4b4e55')}
                   >
-                    {showLogs ? '▼ log' : '▶ log'}
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
+                      style={{ transform: showLogs ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+                      <path d="M2 1l4 3-4 3V1z"/>
+                    </svg>
+                    log
+                    {logs.length > 0 && (
+                      <span style={{ color: '#343d41' }}>({logs.length})</span>
+                    )}
                   </button>
                 </div>
               )}
@@ -240,7 +256,10 @@ export default function App() {
 
               {phase === 'done' && results.length > 0 && (
                 <div className="card">
-                  <div className="section-label">resumen</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="section-label mb-0">resumen</div>
+                    <span className="text-xs font-mono" style={{ color: '#798186' }}>{results.length} bugs</span>
+                  </div>
                   <StatsGrid results={results} />
                 </div>
               )}

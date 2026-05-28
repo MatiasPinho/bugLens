@@ -44,7 +44,13 @@ function mapHeader(header: string): string | null {
  * Toma la primera hoja con datos.
  */
 export function readExcel(filePath: string): RawBug[] {
-  const workbook = XLSX.readFile(filePath, { type: 'file', cellFormula: false })
+  const isCsv = filePath.toLowerCase().endsWith('.csv')
+  const workbook = XLSX.readFile(filePath, {
+    type: 'file',
+    cellFormula: false,
+    // CSV: forzar UTF-8 para evitar que Ã³ aparezca en lugar de ó
+    codepage: isCsv ? 65001 : undefined,
+  })
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) throw new Error('El Excel no tiene hojas.')
 
@@ -56,7 +62,17 @@ export function readExcel(filePath: string): RawBug[] {
 
   if (rows.length === 0) throw new Error('La primera hoja del Excel está vacía.')
 
-  return rows.map((row, index) => {
+  // Detectar filas que son encabezados repetidos (ej: fila con Nombre=Nombre, Vista=Vista)
+  const isRepeatedHeader = (row: Record<string, string>): boolean => {
+    const entries = Object.entries(row).filter(([, v]) => v.trim() !== '')
+    if (entries.length === 0) return false
+    const matching = entries.filter(([k, v]) => k.trim().toLowerCase() === v.trim().toLowerCase())
+    return matching.length >= Math.ceil(entries.length * 0.6)
+  }
+
+  const validRows = rows.filter((row) => !isRepeatedHeader(row))
+
+  return validRows.map((row, index) => {
     const rawRow: Record<string, string> = {}
     const mapped: Partial<RawBug> = {}
     let googleDocLinks: string[] = []

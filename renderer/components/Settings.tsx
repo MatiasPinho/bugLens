@@ -147,8 +147,10 @@ export default function Settings({
 
   return (
     <div className="h-full overflow-y-auto p-6 max-w-2xl mx-auto font-mono">
-      <div className="text-xs uppercase tracking-wider mb-6" style={{ color: '#4b4e55' }}>
-        ~/buglens/config
+      <div className="flex items-center gap-2 mb-6">
+        <div className="text-xs font-mono uppercase tracking-wider" style={{ color: '#5d6367' }}>
+          ~/buglens/config
+        </div>
       </div>
 
       {/* ── Repos ── */}
@@ -215,13 +217,17 @@ export default function Settings({
 
         <div className="pt-3" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
           <button
-            className="text-xs transition-colors"
-            style={{ color: '#343d41' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#4b4e55')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#343d41')}
+            className="text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+            style={{ color: '#4b4e55' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#798186')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#4b4e55')}
             onClick={() => setShowOAuth((v) => !v)}
           >
-            {showOAuth ? '▼' : '▶'} oauth avanzado
+            <svg width="7" height="7" viewBox="0 0 8 8" fill="currentColor"
+              style={{ transform: showOAuth ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+              <path d="M2 1l4 3-4 3V1z"/>
+            </svg>
+            oauth avanzado
           </button>
 
           {showOAuth && (
@@ -259,27 +265,37 @@ export default function Settings({
       {/* ── LLM ── */}
       <Section title="modelo llm">
         <div className="space-y-1.5 mb-4">
-          {LLM_OPTIONS.map((opt) => (
-            <label
-              key={opt.id}
-              className="flex items-start gap-3 p-2.5 rounded cursor-pointer transition-colors"
-              style={{
-                border: `1px solid ${settings.llmProvider === opt.id ? 'rgba(121,129,134,0.50)' : 'rgba(93,99,103,0.22)'}`,
-                background: settings.llmProvider === opt.id ? 'rgba(121,129,134,0.08)' : 'transparent',
-              }}
-            >
-              <input type="radio" name="llmProvider" value={opt.id}
-                checked={settings.llmProvider === opt.id}
-                onChange={() => setSettings((prev) => ({ ...prev, llmProvider: opt.id }))}
-                className="mt-0.5" />
-              <div className="flex-1">
-                <div className="text-xs" style={{ color: settings.llmProvider === opt.id ? '#cacccc' : '#798186' }}>
-                  {opt.name}
+          {LLM_OPTIONS.map((opt) => {
+            const isSelected = settings.llmProvider === opt.id
+            return (
+              <label
+                key={opt.id}
+                className="flex items-start gap-3 p-2.5 rounded cursor-pointer transition-all"
+                style={{
+                  border: `1px solid ${isSelected ? 'rgba(201,194,180,0.30)' : 'rgba(93,99,103,0.22)'}`,
+                  background: isSelected ? 'rgba(201,194,180,0.05)' : 'transparent',
+                }}
+              >
+                <div className="mt-0.5 flex-shrink-0 w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all"
+                  style={{
+                    borderColor: isSelected ? '#c9c2b4' : 'rgba(93,99,103,0.45)',
+                    background: isSelected ? '#c9c2b4' : 'transparent',
+                  }}>
+                  {isSelected && <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#101315' }} />}
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: '#343d41' }}>{opt.description}</div>
-              </div>
-            </label>
-          ))}
+                <input type="radio" name="llmProvider" value={opt.id}
+                  checked={isSelected}
+                  onChange={() => setSettings((prev) => ({ ...prev, llmProvider: opt.id }))}
+                  className="sr-only" />
+                <div className="flex-1">
+                  <div className="text-xs font-medium" style={{ color: isSelected ? '#cacccc' : '#798186' }}>
+                    {opt.name}
+                  </div>
+                  <div className="text-xs mt-0.5" style={{ color: '#4b4e55' }}>{opt.description}</div>
+                </div>
+              </label>
+            )
+          })}
         </div>
 
         {settings.llmProvider === 'ollama' && (
@@ -296,9 +312,9 @@ export default function Settings({
                 <div className="text-xs mt-1" style={{ color: '#343d41' }}>
                   disponibles:{' '}
                   {ollamaStatus.models.map((m, i) => (
-                    <button key={i} className="mr-2 transition-colors"
+                    <button key={i} className="mr-2 transition-colors cursor-pointer"
                       style={{ color: '#798186' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#9fa5a9')}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#c9c2b4')}
                       onMouseLeave={e => (e.currentTarget.style.color = '#798186')}
                       onClick={() => setSettings((prev) => ({ ...prev, llmModel: m }))}>
                       {m}
