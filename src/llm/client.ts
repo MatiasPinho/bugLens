@@ -1,5 +1,9 @@
 import { LLMConfig, LLMProvider, BugAnalysis } from '../types/index.js'
-import { SYSTEM_PROMPT, SYSTEM_PROMPT_OLLAMA, buildUserPrompt } from '../prompts/bugClassifier.js'
+import { SYSTEM_PROMPT_OLLAMA, buildUserPrompt } from '../prompts/bugClassifier.js'
+
+// Single unified system prompt — same expectations for local and cloud models.
+// Cloud LLMs handle the schema fine; local models need the structure to be explicit.
+const SYSTEM_PROMPT = SYSTEM_PROMPT_OLLAMA
 import { EnrichedBug } from '../types/index.js'
 import { runAgentInvestigation } from './agentLoop.js'
 
@@ -260,6 +264,58 @@ function parseProbableCause(val: unknown): string {
   return ''
 }
 
+// ─── Helpers for new structured fields ───────────────────────────────────────
+
+function parseProblemDescription(val: unknown): BugAnalysis['problemDescription'] | undefined {
+  if (typeof val !== 'object' || val === null) return undefined
+  const p = val as Record<string, unknown>
+  return {
+    originalReport:     String(p['originalReport']     ?? ''),
+    documentSummary:    String(p['documentSummary']    ?? ''),
+    observedBehavior:   String(p['observedBehavior']   ?? ''),
+    expectedBehavior:   String(p['expectedBehavior']   ?? ''),
+    reproductionSteps:  toStringArray(p['reproductionSteps']),
+    affectedRoute:      String(p['affectedRoute']      ?? ''),
+    environment:        String(p['environment']        ?? ''),
+    sources:            toStringArray(p['sources']),
+  }
+}
+
+function parseStructuredCause(val: unknown): BugAnalysis['structuredCause'] | undefined {
+  if (typeof val !== 'object' || val === null) return undefined
+  const c = val as Record<string, unknown>
+  return {
+    observation: String(c['observation'] ?? ''),
+    hypothesis:  String(c['hypothesis']  ?? ''),
+    evidence:    toStringArray(c['evidence']),
+    risk:        String(c['risk']        ?? ''),
+  }
+}
+
+function parseWhyNotOther(val: unknown): BugAnalysis['whyNotOtherCategories'] | undefined {
+  if (!Array.isArray(val)) return undefined
+  const out: NonNullable<BugAnalysis['whyNotOtherCategories']> = []
+  for (const item of val) {
+    if (typeof item !== 'object' || item === null) continue
+    const i = item as Record<string, unknown>
+    if (!i['category']) continue
+    out.push({ category: String(i['category']), reason: String(i['reason'] ?? '') })
+  }
+  return out.length > 0 ? out : undefined
+}
+
+// Derive a human-readable probableCause string from the structured form.
+// Used as fallback when the model only provided structuredCause.
+function deriveProbableCauseString(c: BugAnalysis['structuredCause']): string {
+  if (!c) return ''
+  const parts: string[] = []
+  if (c.observation) parts.push(`OBSERVACIÓN: ${c.observation}`)
+  if (c.hypothesis)  parts.push(`HIPÓTESIS: ${c.hypothesis}`)
+  if (c.evidence.length > 0) parts.push(`EVIDENCIA: ${c.evidence.join('; ')}`)
+  if (c.risk)        parts.push(`RIESGO: ${c.risk}`)
+  return parts.join('\n')
+}
+
 function validateAnalysis(obj: unknown): BugAnalysis {
   if (typeof obj !== 'object' || obj === null) {
     throw new Error('La respuesta no es un objeto JSON')
@@ -282,55 +338,89 @@ function validateAnalysis(obj: unknown): BugAnalysis {
     throw new Error(`Confianza inválida: ${o['confidence']}`)
   }
 
-  // Parse relatedFilesWithReasons — support both array of objects and legacy array of strings
-  const VALID_SOURCES = new Set(['excel', 'document', 'screenshot', 'code', 'inference', 'missing'])
+  const VALID_SOURCES = new Set(['excel', 'document', 'screenshot', 'code', 'inference', 'missing', 'not_confirmed'])
+  const VALID_STRENGTH = new Set(['strong', 'medium', 'weak'])
+  const VALID_RELATION = new Set(['classification', 'probable_cause', 'fix', 'missing_info'])
 
+  // relatedFilesWithReasons — supports objects (with new optional fields) or legacy strings
   const relatedFilesWithReasons: BugAnalysis['relatedFilesWithReasons'] = []
   if (Array.isArray(o['relatedFilesWithReasons'])) {
     for (const item of o['relatedFilesWithReasons']) {
       if (typeof item === 'object' && item !== null) {
         const i = item as Record<string, unknown>
-        if (i['path']) relatedFilesWithReasons.push({ path: String(i['path']), reason: String(i['reason'] ?? '') })
+        if (!i['path']) continue
+        const conf = Number(i['confidence'])
+        relatedFilesWithReasons.push({
+          path: String(i['path']),
+          reason: String(i['reason'] ?? ''),
+          relationType: i['relationType'] ? String(i['relationType']) : undefined,
+          confidence: !isNaN(conf) && conf >= 0 && conf <= 1 ? conf : undefined,
+          whatToCheck: toStringArray(i['whatToCheck']).length > 0 ? toStringArray(i['whatToCheck']) : undefined,
+        })
       } else if (typeof item === 'string' && item) {
         relatedFilesWithReasons.push({ path: item, reason: '' })
       }
     }
   }
 
-  // Parse evidenceUsed
+  // evidenceUsed — supports new strength + relatedTo fields, falls back gracefully
   const evidenceUsed: BugAnalysis['evidenceUsed'] = []
   if (Array.isArray(o['evidenceUsed'])) {
     for (const item of o['evidenceUsed']) {
-      if (typeof item === 'object' && item !== null) {
-        const i = item as Record<string, unknown>
-        const source = String(i['source'] ?? 'inference')
-        evidenceUsed.push({
-          source: (VALID_SOURCES.has(source) ? source : 'inference') as BugAnalysis['evidenceUsed'][0]['source'],
-          description: String(i['description'] ?? ''),
-        })
-      }
+      if (typeof item !== 'object' || item === null) continue
+      const i = item as Record<string, unknown>
+      const source   = String(i['source']   ?? 'inference')
+      const strength = String(i['strength'] ?? '')
+      const related  = String(i['relatedTo'] ?? '')
+      evidenceUsed.push({
+        source: (VALID_SOURCES.has(source) ? source : 'inference') as BugAnalysis['evidenceUsed'][0]['source'],
+        description: String(i['description'] ?? ''),
+        strength: VALID_STRENGTH.has(strength) ? strength as BugAnalysis['evidenceUsed'][0]['strength'] : undefined,
+        relatedTo: VALID_RELATION.has(related) ? related as BugAnalysis['evidenceUsed'][0]['relatedTo'] : undefined,
+      })
     }
   }
 
-  // Derive relatedFiles from relatedFilesWithReasons for backward compat
   const relatedFiles = relatedFilesWithReasons.map((f) => f.path)
+
+  const structuredCause = parseStructuredCause(o['structuredCause'])
+  // If the model didn't produce probableCause but did produce structuredCause, derive it
+  const probableCauseString = parseProbableCause(o['probableCause'])
+  const probableCause = probableCauseString || deriveProbableCauseString(structuredCause) || ''
 
   return {
     category: o['category'] as BugAnalysis['category'],
     severity: o['severity'] as BugAnalysis['severity'],
     difficulty: o['difficulty'] as BugAnalysis['difficulty'],
     confidence,
+    bugType: o['bugType'] ? String(o['bugType']) : undefined,
+
     summary: String(o['summary'] ?? ''),
     affectedArea: String(o['affectedArea'] ?? ''),
+
+    problemDescription: parseProblemDescription(o['problemDescription']),
+    functionalImpact: o['functionalImpact'] ? String(o['functionalImpact']) : undefined,
+
     classificationReason: String(o['classificationReason'] ?? ''),
     confidenceReason: String(o['confidenceReason'] ?? ''),
-    probableCause: parseProbableCause(o['probableCause']),
+    whyNotOtherCategories: parseWhyNotOther(o['whyNotOtherCategories']),
+
+    probableCause,
+    structuredCause,
+
     suggestedFixSteps: toStringArray(o['suggestedFixSteps']),
     investigationSteps: toStringArray(o['investigationSteps']),
     evidenceUsed,
+
     cannotConclude: toStringArray(o['cannotConclude']),
+    missingInformation: toStringArray(o['missingInformation']).length > 0
+      ? toStringArray(o['missingInformation']) : undefined,
+
     relatedFilesWithReasons,
     relatedFiles,
+
+    manualValidationNeeded: typeof o['manualValidationNeeded'] === 'boolean'
+      ? o['manualValidationNeeded'] : undefined,
     needsMoreInfo: Boolean(o['needsMoreInfo']),
     rawResponse: JSON.stringify(obj),
   }

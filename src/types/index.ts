@@ -66,16 +66,50 @@ export type BugCategory =
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical'
 export type Difficulty = 'low' | 'medium' | 'high'
-export type EvidenceSource = 'excel' | 'document' | 'screenshot' | 'code' | 'inference' | 'missing'
+export type EvidenceSource = 'excel' | 'document' | 'screenshot' | 'code' | 'inference' | 'missing' | 'not_confirmed'
+export type EvidenceStrength = 'strong' | 'medium' | 'weak'
+export type EvidenceRelation = 'classification' | 'probable_cause' | 'fix' | 'missing_info'
 
 export interface EvidenceItem {
   source: EvidenceSource
   description: string
+  strength?: EvidenceStrength               // qué tan fuerte sostiene la afirmación
+  relatedTo?: EvidenceRelation              // a qué parte del análisis aplica
 }
 
 export interface RelatedFileWithReason {
   path: string
   reason: string
+  relationType?: string                     // route | configuration | component | template | service | style | model | inference
+  confidence?: number                       // 0–1
+  whatToCheck?: string[]                    // qué mirar dentro de ese archivo
+}
+
+export interface CategoryDiscarded {
+  category: string                          // backend, database, etc.
+  reason: string                            // por qué no se eligió esta categoría
+}
+
+// Descripción del problema — separa "qué se reportó" de "qué creemos que pasa".
+// Todas las claves son strings (o arrays); si una pieza falta, debe venir como
+// "No informado" en vez de null/undefined para que la UI pueda mostrarlo.
+export interface ProblemDescription {
+  originalReport: string                    // descripción del Excel
+  documentSummary: string                   // resumen de lo que dice el Google Doc
+  observedBehavior: string                  // resultado actual
+  expectedBehavior: string                  // resultado esperado
+  reproductionSteps: string[]               // pasos para reproducir
+  affectedRoute: string                     // ruta / URL afectada
+  environment: string                       // ambiente (dev, prod, local…)
+  sources: string[]                         // ["excel", "document", "screenshot", "inference"]
+}
+
+// Causa probable estructurada — separa observación de hipótesis.
+export interface StructuredCause {
+  observation: string                       // qué se observó realmente (confirmado)
+  hypothesis: string                        // mecanismo técnico propuesto
+  evidence: string[]                        // qué sostiene la hipótesis
+  risk: string                              // qué podría estar mal o falta validar
 }
 
 export interface BugAnalysis {
@@ -83,17 +117,32 @@ export interface BugAnalysis {
   severity: Severity
   difficulty: Difficulty
   confidence: number                        // 0–1
+  bugType?: string                          // ui | validation | routing | permissions | api | …
+
   summary: string                           // 1 oración, qué está roto
   affectedArea: string                      // componente / función / módulo específico
-  classificationReason: string             // por qué esta categoría
-  confidenceReason: string                 // por qué esta confianza
-  probableCause: string                    // qué se observó + dónde + hipótesis + certeza
-  suggestedFixSteps: string[]              // pasos concretos del fix
-  investigationSteps: string[]             // pasos ordenados para llegar al bug
-  evidenceUsed: EvidenceItem[]             // fuentes usadas con badge
-  cannotConclude: string[]                 // qué NO se puede afirmar
-  relatedFilesWithReasons: RelatedFileWithReason[]  // archivos + motivo
-  relatedFiles: string[]                   // derivado de relatedFilesWithReasons (compat)
+
+  problemDescription?: ProblemDescription   // qué se reportó (≠ qué creemos que pasa)
+  functionalImpact?: string                 // a qué afecta funcionalmente
+
+  classificationReason: string              // por qué esta categoría
+  confidenceReason: string                  // por qué esta confianza
+  whyNotOtherCategories?: CategoryDiscarded[] // por qué se descartaron las otras
+
+  probableCause: string                     // string legacy — derivado de structuredCause si está
+  structuredCause?: StructuredCause         // versión estructurada (preferida)
+
+  suggestedFixSteps: string[]               // pasos concretos del fix
+  investigationSteps: string[]              // pasos ordenados para llegar al bug
+  evidenceUsed: EvidenceItem[]              // fuentes usadas con badge
+
+  cannotConclude: string[]                  // qué NO se puede afirmar
+  missingInformation?: string[]             // qué información falta
+
+  relatedFilesWithReasons: RelatedFileWithReason[]  // archivos + motivo + qué revisar
+  relatedFiles: string[]                    // derivado de relatedFilesWithReasons (compat)
+
+  manualValidationNeeded?: boolean          // requiere reproducción manual
   needsMoreInfo: boolean
   rawResponse: string
 }

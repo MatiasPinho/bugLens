@@ -1,29 +1,88 @@
 import { EnrichedBug } from '../types/index.js'
 
 // Simplified prompt for local models (Ollama/qwen2.5) — avoids schema confusion
-export const SYSTEM_PROMPT_OLLAMA = `Sos un asistente de triage de bugs. Analizá el reporte y respondé ÚNICAMENTE con un objeto JSON válido usando EXACTAMENTE estos campos:
+export const SYSTEM_PROMPT_OLLAMA = `Sos un asistente de triage técnico de bugs. SEPARÁ "qué se reportó" (problemDescription) de "qué creemos que pasa" (structuredCause). Mostrá evidencia para cada afirmación. Respondé SOLO el JSON. Todo en español.
+
+REGLAS CRÍTICAS (no las rompas):
+1. Todos los campos del schema son OBLIGATORIOS. No omitas ninguno. Si no aplica, usá array vacío [], string vacío "" o "No informado".
+2. Si la sección "CÓDIGO INVESTIGADO POR EL AGENTE" tiene archivos, ESOS archivos deben ir en "relatedFilesWithReasons". Nunca dejes el array vacío si hay código investigado.
+3. Si elegís frontend/backend/database/config, en "whyNotOtherCategories" agregá las otras 2-3 categorías descartadas con el motivo.
+4. Si "observedBehavior" o "expectedBehavior" terminan en "No informado" → ese dato va en "missingInformation".
+5. PROHIBIDAS sin evidencia: "revisar lógica", "verificar componente", "problema de responsive", "falta implementación". Si las usás, agregá la evidencia concreta.
+6. NO INVENTES rutas, archivos, roles, endpoints. Si no aparece en el input, no existe.
+7. Confianza >0.8 solo con código leído + síntoma confirmado. Si solo tenés el reporte: ≤0.6.
+
+SCHEMA EXACTO (rellenar TODOS los campos):
 
 {
   "category": "frontend" | "backend" | "database" | "config" | "data" | "insufficient_info",
   "severity": "low" | "medium" | "high" | "critical",
   "difficulty": "low" | "medium" | "high",
-  "confidence": <número 0.0-1.0>,
-  "summary": "<una oración: qué está roto>",
-  "affectedArea": "<componente, función o módulo específico>",
-  "classificationReason": "<por qué esta categoría>",
-  "confidenceReason": "<por qué esta confianza>",
-  "probableCause": "<OBSERVACIÓN: qué se vio. HIPÓTESIS: mecanismo técnico. CERTEZA: alta/media/baja y por qué>",
-  "suggestedFixSteps": ["<paso 1>", "<paso 2>", "<paso 3>"],
-  "investigationSteps": ["<paso 1>", "<paso 2>", "<paso 3>"],
-  "evidenceUsed": [{"source": "excel"|"document"|"screenshot"|"code"|"inference"|"missing", "description": "<qué se usó>"}],
-  "cannotConclude": ["<qué no se puede confirmar sin más info>"],
-  "relatedFilesWithReasons": [{"path": "<ruta del archivo>", "reason": "<por qué es relevante>"}],
-  "needsMoreInfo": <true|false>
+  "confidence": 0.0-1.0,
+  "bugType": "ui" | "validation" | "routing" | "permissions" | "api" | "database" | "configuration" | "data_quality" | "unknown",
+  "summary": "una oración: qué está roto",
+  "affectedArea": "componente/módulo específico",
+
+  "problemDescription": {
+    "originalReport": "descripción del Excel sin interpretar",
+    "documentSummary": "resumen de lo que dice el doc",
+    "observedBehavior": "qué pasa hoy según el reporte (o 'No informado')",
+    "expectedBehavior": "qué debería pasar (o 'No informado')",
+    "reproductionSteps": ["paso 1", "paso 2"],
+    "affectedRoute": "ruta o 'No informado'",
+    "environment": "dev/prod/local o 'No informado'",
+    "sources": ["excel", "document", "screenshot", "inference"]
+  },
+
+  "functionalImpact": "qué función deja de andar y para quién",
+  "classificationReason": "evidencia concreta de esta categoría",
+  "confidenceReason": "qué tenés y qué te falta",
+  "whyNotOtherCategories": [
+    {"category": "backend", "reason": "por qué no es backend"},
+    {"category": "database", "reason": "por qué no es database"}
+  ],
+
+  "structuredCause": {
+    "observation": "qué se observó (del reporte o código)",
+    "hypothesis": "mecanismo técnico que lo explicaría",
+    "evidence": ["archivo o cita que lo sostiene"],
+    "risk": "qué falta validar antes del fix"
+  },
+  "probableCause": "OBSERVACIÓN: ... HIPÓTESIS: ... CERTEZA: alta|media|baja",
+
+  "suggestedFixSteps": ["paso concreto con archivo/elemento", "paso 2"],
+  "investigationSteps": ["paso 1 con archivo/elemento", "paso 2"],
+
+  "evidenceUsed": [
+    {"source": "excel|document|screenshot|code|inference|missing|not_confirmed", "description": "qué se usó (citar archivo+línea o frase)", "strength": "strong|medium|weak", "relatedTo": "classification|probable_cause|fix|missing_info"}
+  ],
+
+  "cannotConclude": ["afirmación que NO se puede sostener"],
+  "missingInformation": ["qué dato falta para mejorar el análisis"],
+
+  "relatedFilesWithReasons": [
+    {"path": "ruta exacta del archivo investigado", "reason": "qué contiene relevante", "relationType": "route|configuration|component|template|service|style|model|inference", "confidence": 0.0-1.0, "whatToCheck": ["qué mirar dentro"]}
+  ],
+
+  "manualValidationNeeded": true | false,
+  "needsMoreInfo": true | false
 }
 
-Categorías: frontend=UI/CSS/Angular/React, backend=API/servidor/auth, database=SQL/queries, config=env/docker, data=datos corruptos, insufficient_info=no hay suficiente contexto
-Severidad: critical=sistema caído, high=funcionalidad clave rota, medium=funcionalidad secundaria afectada, low=cosmético
-Respondé SOLO el JSON. Sin texto antes ni después. Todo el contenido de los campos en español.`
+9. CATEGORÍAS:
+   - frontend: UI, CSS, navegación, formularios, validaciones cliente, templates
+   - backend: API, lógica servidor, autenticación, jobs
+   - database: queries, índices, integridad de datos
+   - config: env vars, docker, rutas, permisos de configuración
+   - data: datos corruptos como input
+   - insufficient_info: no hay evidencia suficiente
+
+10. SEVERIDAD:
+    - critical: sistema caído / pérdida de datos / falla seguridad
+    - high: funcionalidad clave rota sin workaround
+    - medium: secundaria afectada o con workaround
+    - low: cosmético / inconveniencia menor
+
+Respondé SOLO el JSON. Sin texto antes ni después.`
 
 export const SYSTEM_PROMPT = `Sos un senior developer haciendo triage técnico de bugs reportados por QA.
 Tenés acceso al código fuente real del proyecto (frontend y backend) y a documentos de evidencia.

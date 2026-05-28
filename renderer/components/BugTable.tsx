@@ -32,12 +32,30 @@ const difficultyStyle: Record<string, { label: string; text: string; bg: string;
 }
 
 const evidenceStyle: Record<EvidenceSource, { label: string; text: string; border: string }> = {
-  excel:      { label: 'excel',      text: '#9fa5a9', border: 'rgba(159,165,169,0.30)' },
-  document:   { label: 'doc',        text: '#c9c2b4', border: 'rgba(201,194,180,0.30)' },
-  screenshot: { label: 'captura',    text: '#aeaeae', border: 'rgba(174,174,174,0.30)' },
-  code:       { label: 'código',     text: '#798186', border: 'rgba(121,129,134,0.35)' },
-  inference:  { label: 'inferencia', text: '#c9a07a', border: 'rgba(180,130,100,0.30)' },
-  missing:    { label: 'falta',      text: '#de6145', border: 'rgba(222,97,69,0.30)' },
+  excel:         { label: 'excel',         text: '#9fa5a9', border: 'rgba(159,165,169,0.30)' },
+  document:      { label: 'doc',           text: '#c9c2b4', border: 'rgba(201,194,180,0.30)' },
+  screenshot:    { label: 'captura',       text: '#aeaeae', border: 'rgba(174,174,174,0.30)' },
+  code:          { label: 'código',        text: '#798186', border: 'rgba(121,129,134,0.35)' },
+  inference:     { label: 'inferencia',    text: '#c9a07a', border: 'rgba(180,130,100,0.30)' },
+  missing:       { label: 'falta',         text: '#de6145', border: 'rgba(222,97,69,0.30)' },
+  not_confirmed: { label: 'no confirmado', text: '#c9a07a', border: 'rgba(180,130,100,0.30)' },
+}
+
+const strengthStyle: Record<string, { label: string; text: string }> = {
+  strong: { label: 'fuerte', text: '#9fa5a9' },
+  medium: { label: 'media',  text: '#c9c2b4' },
+  weak:   { label: 'débil',  text: '#c9a07a' },
+}
+
+const relationStyle: Record<string, string> = {
+  route:         '#9fa5a9',
+  configuration: '#c9c2b4',
+  component:     '#798186',
+  template:      '#aeaeae',
+  service:       '#798186',
+  style:         '#c9c2b4',
+  model:         '#9fa5a9',
+  inference:     '#c9a07a',
 }
 
 // ─── Atoms ────────────────────────────────────────────────────────────────────
@@ -362,6 +380,11 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <OmBadge style={ct}>{analysis.category}</OmBadge>
+          {analysis.bugType && (
+            <OmBadge style={{ text: '#798186', bg: 'rgba(121,129,134,0.08)', border: 'rgba(121,129,134,0.22)' }}>
+              {analysis.bugType}
+            </OmBadge>
+          )}
           <OmBadge style={sv}>{analysis.severity}</OmBadge>
           <OmBadge style={{ text: diff.text, bg: diff.bg, border: diff.border }}>{diff.label}</OmBadge>
           <div className="ml-1"><ConfidenceBar value={analysis.confidence} /></div>
@@ -370,53 +393,107 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
 
       <div className="p-5 space-y-3" style={{ background: 'rgba(16,19,21,0.70)' }}>
 
-        {/* Área afectada + clasificación */}
-        <div className="grid grid-cols-2 gap-3">
-          {analysis.affectedArea && (
-            <SectionCard title="área afectada" accent>
-              <div className="flex items-start gap-2">
-                <code className="text-xs font-mono break-all flex-1" style={{ color: '#798186' }}>
-                  {analysis.affectedArea}
-                </code>
-                <CopyButton text={analysis.affectedArea} />
-              </div>
-            </SectionCard>
-          )}
+        {/* 1. DESCRIPCIÓN DEL PROBLEMA — arriba de todo */}
+        <ProblemDescriptionSection
+          problem={analysis.problemDescription}
+          raw={raw}
+          googleDocs={enriched.googleDocs}
+        />
 
-          <SectionCard title="por qué esta clasificación">
-            {analysis.classificationReason ? (
-              <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{analysis.classificationReason}</p>
-            ) : (
-              <p className="text-xs italic" style={{ color: '#343d41' }}>sin información</p>
-            )}
-            {analysis.confidenceReason && (
-              <p className="text-xs mt-2 pt-2 leading-relaxed" style={{ color: '#4b4e55', borderTop: '1px solid rgba(93,99,103,0.18)' }}>
-                {analysis.confidenceReason}
+        {/* 2. CLASIFICACIÓN + por qué no otras categorías */}
+        <SectionCard title="por qué esta clasificación">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="label">razón</div>
+              <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>
+                {analysis.classificationReason || <span className="italic" style={{ color: '#343d41' }}>sin información</span>}
               </p>
+              {analysis.confidenceReason && (
+                <>
+                  <div className="label" style={{ marginTop: '0.75rem' }}>razón de confianza</div>
+                  <p className="text-xs leading-relaxed" style={{ color: '#798186' }}>{analysis.confidenceReason}</p>
+                </>
+              )}
+            </div>
+            {analysis.whyNotOtherCategories && analysis.whyNotOtherCategories.length > 0 && (
+              <div>
+                <div className="label">descartado</div>
+                <ul className="space-y-1.5">
+                  {analysis.whyNotOtherCategories.map((c, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5"
+                        style={{ color: '#4b4e55', border: '1px solid rgba(75,78,85,0.30)' }}>
+                        {c.category}
+                      </span>
+                      <span className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{c.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-          </SectionCard>
-        </div>
-
-        {/* Causa probable */}
-        <SectionCard title="causa probable">
-          <div className="text-xs leading-relaxed whitespace-pre-wrap font-mono" style={{ color: '#9fa5a9' }}>
-            {analysis.probableCause}
           </div>
         </SectionCard>
 
-        {/* Evidencia */}
+        {/* 3. ÁREA AFECTADA */}
+        {analysis.affectedArea && (
+          <SectionCard title="área afectada" accent>
+            <div className="flex items-start gap-2">
+              <code className="text-xs font-mono break-all flex-1" style={{ color: '#798186' }}>
+                {analysis.affectedArea}
+              </code>
+              <CopyButton text={analysis.affectedArea} />
+            </div>
+          </SectionCard>
+        )}
+
+        {/* 4. CAUSA PROBABLE — estructurada si está, fallback al string */}
+        <SectionCard title="causa probable">
+          {analysis.structuredCause ? (
+            <StructuredCauseView cause={analysis.structuredCause} />
+          ) : (
+            <div className="text-xs leading-relaxed whitespace-pre-wrap font-mono" style={{ color: '#9fa5a9' }}>
+              {analysis.probableCause || <span className="italic" style={{ color: '#343d41' }}>sin información</span>}
+            </div>
+          )}
+        </SectionCard>
+
+        {/* 5. IMPACTO FUNCIONAL */}
+        {analysis.functionalImpact && (
+          <SectionCard title="impacto funcional">
+            <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{analysis.functionalImpact}</p>
+          </SectionCard>
+        )}
+
+        {/* 6. EVIDENCIA USADA */}
         {analysis.evidenceUsed && analysis.evidenceUsed.length > 0 && (
           <SectionCard title="evidencia usada">
             <div className="space-y-1.5">
               {analysis.evidenceUsed.map((ev, i) => {
                 const es = evidenceStyle[ev.source] ?? evidenceStyle['inference']
+                const str = ev.strength ? strengthStyle[ev.strength] : null
                 return (
                   <div key={i} className="flex items-start gap-2">
                     <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5"
                       style={{ color: es.text, border: `1px solid ${es.border}`, background: 'transparent' }}>
                       {es.label}
                     </span>
-                    <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{ev.description}</span>
+                    <div className="flex-1">
+                      <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{ev.description}</span>
+                      {(str || ev.relatedTo) && (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {str && (
+                            <span className="text-xs font-mono" style={{ color: str.text }}>
+                              {str.label}
+                            </span>
+                          )}
+                          {ev.relatedTo && (
+                            <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>
+                              → {ev.relatedTo.replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -432,7 +509,7 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           </SectionCard>
         )}
 
-        {/* Fix + Investigación */}
+        {/* 7 + 8. FIX SUGERIDO + INVESTIGACIÓN */}
         <div className="grid grid-cols-2 gap-3">
           {analysis.suggestedFixSteps && analysis.suggestedFixSteps.length > 0 && (
             <SectionCard title="fix sugerido">
@@ -469,19 +546,43 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           )}
         </div>
 
-        {/* Archivos relacionados */}
+        {/* 9. ARCHIVOS RELACIONADOS con whatToCheck */}
         {analysis.relatedFilesWithReasons && analysis.relatedFilesWithReasons.length > 0 && (
           <SectionCard title="archivos relacionados">
             <div className="space-y-2">
               {analysis.relatedFilesWithReasons.map((f, i) => (
                 <div key={i} className="rounded p-2.5"
                   style={{ background: 'rgba(13,16,19,0.70)', border: '1px solid rgba(93,99,103,0.18)' }}>
-                  <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex items-center gap-2 mb-1">
+                    {f.relationType && (
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{ color: relationStyle[f.relationType] ?? '#798186', border: `1px solid ${relationStyle[f.relationType] ?? '#798186'}33` }}>
+                        {f.relationType}
+                      </span>
+                    )}
                     <code className="text-xs font-mono flex-1 break-all" style={{ color: '#798186' }}>{f.path}</code>
+                    {typeof f.confidence === 'number' && (
+                      <span className="text-xs font-mono flex-shrink-0" style={{ color: '#4b4e55' }}>
+                        {Math.round(f.confidence * 100)}%
+                      </span>
+                    )}
                     <CopyButton text={f.path} />
                   </div>
                   {f.reason && (
                     <p className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{f.reason}</p>
+                  )}
+                  {f.whatToCheck && f.whatToCheck.length > 0 && (
+                    <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(93,99,103,0.15)' }}>
+                      <div className="label">qué revisar</div>
+                      <ul className="space-y-0.5">
+                        {f.whatToCheck.map((c, j) => (
+                          <li key={j} className="flex items-start gap-1.5">
+                            <span className="text-xs flex-shrink-0" style={{ color: '#343d41' }}>›</span>
+                            <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{c}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               ))}
@@ -489,21 +590,46 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
           </SectionCard>
         )}
 
-        {/* No se puede afirmar */}
-        {analysis.cannotConclude && analysis.cannotConclude.length > 0 && (
-          <SectionCard title="no se puede afirmar">
-            <ul className="space-y-1">
-              {analysis.cannotConclude.map((item, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="text-xs font-mono flex-shrink-0 mt-0.5" style={{ color: '#c9a07a' }}>✗</span>
-                  <span className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </SectionCard>
+        {/* 10 + 11. INFORMACIÓN FALTANTE + NO SE PUEDE AFIRMAR */}
+        <div className="grid grid-cols-2 gap-3">
+          {analysis.missingInformation && analysis.missingInformation.length > 0 && (
+            <SectionCard title="información faltante">
+              <ul className="space-y-1">
+                {analysis.missingInformation.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-xs font-mono flex-shrink-0 mt-0.5" style={{ color: '#de6145' }}>?</span>
+                    <span className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+          {analysis.cannotConclude && analysis.cannotConclude.length > 0 && (
+            <SectionCard title="no se puede afirmar">
+              <ul className="space-y-1">
+                {analysis.cannotConclude.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-xs font-mono flex-shrink-0 mt-0.5" style={{ color: '#c9a07a' }}>✗</span>
+                    <span className="text-xs leading-relaxed" style={{ color: '#4b4e55' }}>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+        </div>
+
+        {/* VALIDACIÓN MANUAL — banner si aplica */}
+        {analysis.manualValidationNeeded && (
+          <div className="rounded p-2.5 flex items-center gap-2"
+            style={{ background: 'rgba(180,130,100,0.06)', border: '1px solid rgba(180,130,100,0.22)' }}>
+            <span className="text-xs font-mono" style={{ color: '#c9a07a' }}>⚠</span>
+            <span className="text-xs font-mono" style={{ color: '#c9a07a' }}>
+              requiere validación manual — reproducí el caso antes de aplicar el fix
+            </span>
+          </div>
         )}
 
-        {/* Reporte original colapsable */}
+        {/* Reporte original colapsable (debug) */}
         <details className="group">
           <summary className="text-xs font-mono cursor-pointer select-none transition-colors flex items-center gap-1.5"
             style={{ color: '#4b4e55', listStyle: 'none' }}
@@ -512,7 +638,7 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
             <svg width="7" height="7" viewBox="0 0 8 8" fill="currentColor" className="group-open:rotate-90 transition-transform">
               <path d="M2 1l4 3-4 3V1z"/>
             </svg>
-            reporte original
+            datos originales del reporte
           </summary>
           <div className="mt-2 rounded p-3 space-y-2"
             style={{ border: '1px solid rgba(93,99,103,0.18)', background: 'transparent' }}>
@@ -558,6 +684,161 @@ function ExpandedDetail({ result }: { result: AnalyzedBug }) {
               <CodeBlock key={i} {...frag} />
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Problem description section ──────────────────────────────────────────────
+// Renders the "qué se reportó" block at the top of the detail.
+// Falls back to raw excel fields when the LLM didn't produce a structured problemDescription.
+
+function ProblemDescriptionSection({
+  problem,
+  raw,
+  googleDocs,
+}: {
+  problem?: import('../../src/types/index').ProblemDescription
+  raw: import('../../src/types/index').RawBug
+  googleDocs: import('../../src/types/index').GoogleDocContent[]
+}) {
+  // Effective values: prefer structured problemDescription, fallback to raw excel fields
+  const original   = problem?.originalReport   || raw.description       || 'No informado'
+  const docSummary = problem?.documentSummary  || ''
+  const observed   = problem?.observedBehavior || raw.actualResult      || 'No informado'
+  const expected   = problem?.expectedBehavior || raw.expectedResult    || 'No informado'
+  const steps      = problem?.reproductionSteps && problem.reproductionSteps.length > 0
+    ? problem.reproductionSteps
+    : raw.stepsToReproduce ? raw.stepsToReproduce.split('\n').filter(Boolean) : []
+  const route      = problem?.affectedRoute || ''
+  const env        = problem?.environment   || raw.environment || ''
+  const sources    = problem?.sources       || []
+  const hasDocs    = googleDocs.some((d) => d.accessible)
+  const hasImgs    = googleDocs.some((d) => (d.images?.length ?? 0) > 0)
+
+  // Derive sources badges if not provided
+  const inferredSources = sources.length > 0 ? sources : [
+    'excel',
+    ...(hasDocs ? ['document'] : []),
+    ...(hasImgs ? ['screenshot'] : []),
+  ]
+
+  return (
+    <SectionCard title="descripción del problema" accent>
+      <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+        <div className="col-span-2">
+          <div className="label">reporte original</div>
+          <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{original}</p>
+        </div>
+
+        {docSummary && (
+          <div className="col-span-2">
+            <div className="label">resumen del documento</div>
+            <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{docSummary}</p>
+          </div>
+        )}
+
+        <div>
+          <div className="label">resultado actual</div>
+          <p className="text-xs leading-relaxed" style={{ color: observed === 'No informado' ? '#4b4e55' : '#9fa5a9' }}>
+            {observed}
+          </p>
+        </div>
+
+        <div>
+          <div className="label">resultado esperado</div>
+          <p className="text-xs leading-relaxed" style={{ color: expected === 'No informado' ? '#4b4e55' : '#9fa5a9' }}>
+            {expected}
+          </p>
+        </div>
+
+        {steps.length > 0 && (
+          <div className="col-span-2">
+            <div className="label">pasos para reproducir</div>
+            <ol className="space-y-1">
+              {steps.map((s, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="text-xs font-mono flex-shrink-0 mt-0.5" style={{ color: '#4b4e55' }}>{i + 1}.</span>
+                  <span className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>
+                    {s.replace(/^\d+[.)]\s*/, '')}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {route && (
+          <div>
+            <div className="label">ruta / pantalla</div>
+            <code className="text-xs font-mono break-all" style={{ color: '#798186' }}>{route}</code>
+          </div>
+        )}
+
+        {env && (
+          <div>
+            <div className="label">ambiente</div>
+            <code className="text-xs font-mono" style={{ color: '#798186' }}>{env}</code>
+          </div>
+        )}
+
+        {inferredSources.length > 0 && (
+          <div className="col-span-2">
+            <div className="label">fuentes</div>
+            <div className="flex flex-wrap gap-1.5">
+              {inferredSources.map((s, i) => {
+                const es = evidenceStyle[s as EvidenceSource] ?? evidenceStyle['inference']
+                return (
+                  <span key={i} className="text-xs font-mono px-1.5 py-0.5 rounded"
+                    style={{ color: es.text, border: `1px solid ${es.border}` }}>
+                    {es.label}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  )
+}
+
+// ─── Structured cause view ────────────────────────────────────────────────────
+// Renders the observation / hypothesis / evidence / risk split.
+
+function StructuredCauseView({ cause }: { cause: NonNullable<import('../../src/types/index').BugAnalysis['structuredCause']> }) {
+  return (
+    <div className="space-y-2.5">
+      {cause.observation && (
+        <div>
+          <div className="label">observación confirmada</div>
+          <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{cause.observation}</p>
+        </div>
+      )}
+      {cause.hypothesis && (
+        <div>
+          <div className="label">hipótesis técnica</div>
+          <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{cause.hypothesis}</p>
+        </div>
+      )}
+      {cause.evidence && cause.evidence.length > 0 && (
+        <div>
+          <div className="label">evidencia que sostiene</div>
+          <ul className="space-y-0.5">
+            {cause.evidence.map((e, i) => (
+              <li key={i} className="flex items-start gap-1.5">
+                <span className="text-xs flex-shrink-0" style={{ color: '#343d41' }}>›</span>
+                <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{e}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {cause.risk && (
+        <div>
+          <div className="label">riesgo / a validar</div>
+          <p className="text-xs leading-relaxed" style={{ color: '#c9a07a' }}>{cause.risk}</p>
         </div>
       )}
     </div>
