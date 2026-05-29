@@ -261,6 +261,8 @@ export default function BugTable({
   const [filterCategory, setFilterCategory] = useState<BugCategory | 'all'>('all')
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all')
   const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   const filtered = useMemo(() => {
     return results
@@ -283,6 +285,32 @@ export default function BugTable({
 
   const categories = useMemo(() => [...new Set(results.map((r) => r.analysis.category))], [results])
   const severities  = useMemo(() => [...new Set(results.map((r) => r.analysis.severity))],  [results])
+
+  const groups = useMemo(() => {
+    if (viewMode !== 'grouped') return []
+    const map = new Map<string, AnalyzedBug[]>()
+    for (const bug of filtered) {
+      const key = bug.analysis.affectedArea?.trim() || 'sin área definida'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(bug)
+    }
+    return [...map.entries()]
+      .map(([area, bugs]) => ({ area, bugs }))
+      .sort((a, b) =>
+        Math.min(...a.bugs.map((b) => severityOrder[b.analysis.severity])) -
+        Math.min(...b.bugs.map((b) => severityOrder[b.analysis.severity]))
+      )
+  }, [filtered, viewMode])
+
+  const renderItems = useMemo(() => {
+    if (viewMode === 'flat') {
+      return filtered.map((bug) => ({ type: 'bug' as const, bug }))
+    }
+    return groups.flatMap((g) => [
+      { type: 'group-header' as const, area: g.area, bugs: g.bugs },
+      ...(collapsedGroups.has(g.area) ? [] : g.bugs.map((bug) => ({ type: 'bug' as const, bug }))),
+    ])
+  }, [filtered, viewMode, groups, collapsedGroups])
 
   return (
     <div className="flex flex-col h-full">
@@ -324,7 +352,28 @@ export default function BugTable({
             limpiar
           </button>
         )}
-        <span className="text-xs font-mono ml-auto flex items-center gap-2.5" style={{ color: '#4b4e55' }}>
+        <button
+          onClick={() => setViewMode((v) => v === 'flat' ? 'grouped' : 'flat')}
+          className="flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded transition-all cursor-pointer ml-auto"
+          style={{
+            color:      viewMode === 'grouped' ? '#c9c2b4' : '#4b4e55',
+            border:     `1px solid ${viewMode === 'grouped' ? 'rgba(201,194,180,0.28)' : 'rgba(93,99,103,0.22)'}`,
+            background: viewMode === 'grouped' ? 'rgba(201,194,180,0.07)' : 'transparent',
+          }}
+          title={viewMode === 'flat' ? 'agrupar por pantalla' : 'vista plana'}
+        >
+          {viewMode === 'grouped' ? (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M3 7h4v4H3zM3 14h4v4H3zM10 7h11M10 11h7M10 14h11M10 18h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M2 6h8v4H2zM2 14h8v4H2zM13 6h9M13 10h6M13 14h9M13 18h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          )}
+          {viewMode === 'grouped' ? 'agrupado' : 'agrupar'}
+        </button>
+        <span className="text-xs font-mono flex items-center gap-2.5" style={{ color: '#4b4e55' }}>
           {analyzing && (
             <span className="flex items-center gap-1.5" style={{ color: '#9fa5a9' }}>
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#c9c2b4' }} />
@@ -356,7 +405,24 @@ export default function BugTable({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => {
+            {renderItems.map((item) => {
+              if (item.type === 'group-header') {
+                return (
+                  <GroupHeaderRow
+                    key={`gh-${item.area}`}
+                    area={item.area}
+                    bugs={item.bugs}
+                    collapsed={collapsedGroups.has(item.area)}
+                    onToggle={() => setCollapsedGroups((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(item.area)) next.delete(item.area)
+                      else next.add(item.area)
+                      return next
+                    })}
+                  />
+                )
+              }
+              const r = item.bug
               const id = r.enriched.raw.id
               const isExpanded = expandedId === id
               const isFocused  = focusedId === id
@@ -460,6 +526,75 @@ export default function BugTable({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Group header row ─────────────────────────────────────────────────────────
+
+function GroupHeaderRow({
+  area,
+  bugs,
+  collapsed,
+  onToggle,
+}: {
+  area: string
+  bugs: AnalyzedBug[]
+  collapsed: boolean
+  onToggle: () => void
+}) {
+  const counts = {
+    critical: bugs.filter((b) => b.analysis.severity === 'critical').length,
+    high:     bugs.filter((b) => b.analysis.severity === 'high').length,
+    medium:   bugs.filter((b) => b.analysis.severity === 'medium').length,
+    low:      bugs.filter((b) => b.analysis.severity === 'low').length,
+  }
+  const worstColor =
+    counts.critical > 0 ? '#de6145' :
+    counts.high     > 0 ? '#c9a07a' :
+    counts.medium   > 0 ? '#c9c2b4' : '#9fa5a9'
+
+  return (
+    <tr
+      onClick={onToggle}
+      className="cursor-pointer select-none"
+      style={{ background: '#141719', borderBottom: '1px solid rgba(93,99,103,0.20)' }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = '#1c2124')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = '#141719')}
+    >
+      <td colSpan={8} style={{ padding: '0.45rem 0.75rem' }}>
+        <div className="flex items-center gap-2.5">
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
+            style={{
+              color: '#798186',
+              transform: collapsed ? 'none' : 'rotate(90deg)',
+              transition: 'transform 0.15s',
+              flexShrink: 0,
+            }}>
+            <path d="M2 1l4 3-4 3V1z"/>
+          </svg>
+          <span className="text-xs font-mono font-medium" style={{ color: worstColor }}>{area}</span>
+          <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+            style={{ color: '#798186', border: '1px solid rgba(93,99,103,0.28)', background: 'rgba(121,129,134,0.08)' }}>
+            {bugs.length} bug{bugs.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-2">
+            {counts.critical > 0 && <SeverityDot count={counts.critical} color="#de6145" />}
+            {counts.high     > 0 && <SeverityDot count={counts.high}     color="#c9a07a" />}
+            {counts.medium   > 0 && <SeverityDot count={counts.medium}   color="#c9c2b4" />}
+            {counts.low      > 0 && <SeverityDot count={counts.low}      color="#9fa5a9" />}
+          </div>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function SeverityDot({ count, color }: { count: number; color: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+      <span className="text-xs font-mono" style={{ color }}>{count}</span>
     </div>
   )
 }

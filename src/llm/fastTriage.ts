@@ -14,7 +14,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
-import type { LLMConfig, EnrichedBug, BugTriage, BugAnalysis } from '../types/index.js'
+import type { LLMConfig, EnrichedBug, BugTriage, BugAnalysis, RawBug } from '../types/index.js'
 import { makeCacheKey, loadCachedTriage, saveCachedTriage } from './analysisCache.js'
 
 // ─── Prompt minimal ──────────────────────────────────────────────────────────
@@ -144,6 +144,62 @@ function findCandidateFiles(enriched: EnrichedBug, repoPaths: string[]): string[
     .map(([p]) => p)
 }
 
+// ─── Relevant doc section extractor ─────────────────────────────────────────
+// Problema: un doc puede documentar 7-8 bugs. Antes se pasaban los primeros
+// 1500 chars, que podían corresponder a un bug distinto al que se está analizando.
+// Solución: ventana deslizante de párrafos para encontrar la sección del doc
+// que tiene más señal sobre el bug actual (por título, descripción y columnas).
+
+function extractRelevantDocSection(bug: RawBug, docText: string, maxChars = 2000): string {
+  const paragraphs = docText
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 15)
+
+  // Doc corto o sin estructura multi-párrafo: devolver inicio
+  if (paragraphs.length <= 5) return docText.slice(0, maxChars)
+
+  // Keywords: título > descripción > valores de columnas extra del Excel
+  const titleTerms = bug.title.toLowerCase().split(/[\s/\-_]+/).filter((w) => w.length > 3)
+  const descTerms  = bug.description.toLowerCase().split(/[\s/\-_]+/).filter((w) => w.length > 3)
+  const rowTerms   = Object.values(bug.rawRow)
+    .flatMap((v: string) => v.toLowerCase().split(/[\s/\-_.,;]+/))
+    .filter((w: string) => w.length > 3)
+
+  // Score por párrafo
+  const scores = paragraphs.map((p) => {
+    const lp = p.toLowerCase()
+    let score = 0
+    if (lp.includes(bug.title.toLowerCase())) score += 10  // match exacto del título
+    for (const t of titleTerms) if (lp.includes(t)) score += 2
+    for (const t of descTerms)  if (lp.includes(t)) score += 1
+    for (const t of rowTerms)   if (lp.includes(t)) score += 1
+    return score
+  })
+
+  // Ventana deslizante de 4 párrafos para encontrar la sección con más señal
+  const W = 4
+  let bestStart = 0, bestScore = -1
+  for (let i = 0; i <= paragraphs.length - W; i++) {
+    const ws = scores.slice(i, i + W).reduce((a, b) => a + b, 0)
+    if (ws > bestScore) { bestScore = ws; bestStart = i }
+  }
+
+  // Sin match significativo: usar inicio del documento (comportamiento anterior)
+  if (bestScore < 2) return docText.slice(0, maxChars)
+
+  // Un párrafo de contexto antes del mejor match, luego recolectar hasta maxChars
+  const startIdx = Math.max(0, bestStart - 1)
+  const result: string[] = []
+  let total = 0
+  for (let i = startIdx; i < paragraphs.length && total < maxChars; i++) {
+    result.push(paragraphs[i])
+    total += paragraphs[i].length + 2
+  }
+
+  return result.join('\n\n').slice(0, maxChars)
+}
+
 // ─── Fast triage prompt builder ──────────────────────────────────────────────
 
 function buildFastTriagePrompt(enriched: EnrichedBug, candidateFiles: string[]): string {
@@ -166,10 +222,9 @@ function buildFastTriagePrompt(enriched: EnrichedBug, candidateFiles: string[]):
   if (googleDocs.length > 0) {
     const accessible = googleDocs.filter((d) => d.accessible)
     if (accessible.length > 0) {
-      sections.push('\n=== DOCUMENTO ===')
+      sections.push('\n=== DOCUMENTO (sección relevante al bug) ===')
       for (const doc of accessible) {
-        // Limitar a 1500 chars del documento para que el prompt no sea enorme
-        sections.push(doc.text.slice(0, 1500))
+        sections.push(extractRelevantDocSection(raw, doc.text))
         const imgCount = doc.images?.length ?? 0
         if (imgCount > 0) sections.push(`[Documento tiene ${imgCount} captura(s) — no analizadas en fast triage]`)
       }
