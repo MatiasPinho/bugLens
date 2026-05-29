@@ -14,6 +14,14 @@ interface Props {
 
 const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 
+// Matches the focused variant in styles.css row-strip-*-focused
+const severityStripColor: Record<Severity, string> = {
+  critical: 'rgba(222, 97, 69, 1)',
+  high:     'rgba(201, 144, 100, 0.95)',
+  medium:   'rgba(201, 194, 180, 0.75)',
+  low:      'rgba(159, 165, 169, 0.55)',
+}
+
 // Omarchy-palette badge classes — defined as inline styles to avoid Tailwind purge issues with dynamic values
 const severityStyle: Record<Severity, { text: string; bg: string; border: string }> = {
   critical: { text: '#de6145', bg: 'rgba(222,97,69,0.10)',  border: 'rgba(222,97,69,0.30)' },
@@ -334,16 +342,17 @@ export default function BugTable({
 
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 z-10" style={{ background: '#101315', borderBottom: '1px solid rgba(93,99,103,0.20)' }}>
-            <tr style={{ color: '#5d6367' }} className="text-left font-mono uppercase tracking-wider">
-              <th className="pl-3 pr-1 py-2 font-medium w-4"></th>
-              <th className="px-2 py-2 font-medium w-8">#</th>
-              <th className="px-4 py-2 font-medium">título</th>
-              <th className="px-4 py-2 font-medium">área</th>
-              <th className="px-4 py-2 font-medium">categoría</th>
-              <th className="px-4 py-2 font-medium">severidad</th>
-              <th className="px-4 py-2 font-medium">fix</th>
-              <th className="px-4 py-2 font-medium">confianza</th>
+          <thead className="sticky top-0 z-10" style={{ background: '#101315', borderBottom: '1px solid rgba(93,99,103,0.18)' }}>
+            <tr className="text-left font-mono"
+              style={{ fontSize: '0.60rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.11em', color: '#4b4e55' }}>
+              <th className="pl-3 pr-1 py-2 w-4 font-normal"></th>
+              <th className="px-2 py-2 w-8">#</th>
+              <th className="px-4 py-2">título</th>
+              <th className="px-4 py-2">área</th>
+              <th className="px-4 py-2">cat</th>
+              <th className="px-4 py-2">severidad</th>
+              <th className="px-4 py-2">fix</th>
+              <th className="px-4 py-2">confianza</th>
             </tr>
           </thead>
           <tbody>
@@ -361,16 +370,11 @@ export default function BugTable({
                     ref={(el) => { if (el && isFocused) el.scrollIntoView({ block: 'nearest' }) }}
                     onClick={() => { onFocus?.(id); setExpandedId(isExpanded ? null : id) }}
                     onMouseEnter={(e) => { onFocus?.(id); if (!isExpanded) e.currentTarget.style.background = 'rgba(28,33,36,0.80)' }}
-                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = isFocused ? 'rgba(201,194,180,0.04)' : 'transparent' }}
-                    className="cursor-pointer"
+                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = isExpanded ? '#1c2124' : isFocused ? 'rgba(201,194,180,0.04)' : 'transparent' }}
+                    className={`cursor-pointer ${isExpanded || isFocused ? `row-strip-${r.analysis.severity}-focused` : `row-strip-${r.analysis.severity}`}`}
                     style={{
                       borderBottom: isExpanded ? 'none' : '1px solid rgba(93,99,103,0.12)',
-                      // Cuando está expandida: borde crema arriba (continúa hacia el detalle abajo) + fondo más oscuro para que se sienta "abierta"
                       background: isExpanded ? '#1c2124' : isFocused ? 'rgba(201,194,180,0.04)' : 'transparent',
-                      // Inset lateral: focus = crema. Expanded además marca un borde lateral más fuerte para anclar visualmente
-                      boxShadow: isExpanded
-                        ? 'inset 3px 0 0 #c9c2b4'
-                        : isFocused ? 'inset 2px 0 0 #c9c2b4' : undefined,
                       transition: 'background 0.12s',
                     }}
                   >
@@ -412,11 +416,8 @@ export default function BugTable({
                     <tr>
                       <td colSpan={8} className="p-0"
                         style={{
-                          // Carril crema lateral continuo desde la fila madre arriba +
-                          // border-bottom crema que cierra el bloque. Sin top-border porque
-                          // está pegado a la fila madre (que ya marca el cambio visual).
-                          borderBottom: '2px solid rgba(201,194,180,0.45)',
-                          boxShadow:    'inset 3px 0 0 #c9c2b4',
+                          borderBottom: `2px solid ${severityStripColor[r.analysis.severity]}`,
+                          boxShadow:    `inset 3px 0 0 ${severityStripColor[r.analysis.severity]}`,
                           background:   '#0d1013',
                         }}>
                         <ExpandedDetail result={r} onDeepAnalysis={onDeepAnalysis} onClose={() => setExpandedId(null)} />

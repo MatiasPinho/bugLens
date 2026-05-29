@@ -240,13 +240,19 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-om-base text-om-fg">
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-2.5 bg-om-surface border-b border-om-border/25 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="text-om-fgmuted font-mono text-sm tracking-tight">
-            <span className="text-om-accent">~/</span>buglens
+      <header className="flex items-center justify-between px-4 py-2 bg-om-surface border-b border-om-border/25 flex-shrink-0">
+        <div className="flex items-center gap-2.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ color: '#c9c2b4', flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.5"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <circle cx="11" cy="11" r="2.5" fill="currentColor" opacity="0.7"/>
+          </svg>
+          <span className="font-mono text-sm font-semibold tracking-tight" style={{ color: '#c9c2b4' }}>
+            buglens
           </span>
           {hasIndex && (
-            <span className="text-xs text-om-fgmuted border border-om-border/30 px-2 py-0.5 rounded font-mono">
+            <span className="text-xs border px-1.5 py-0.5 rounded font-mono"
+              style={{ color: '#9fa5a9', borderColor: 'rgba(93,99,103,0.30)' }}>
               idx
             </span>
           )}
@@ -257,18 +263,23 @@ export default function App() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1 rounded text-xs font-mono transition-colors cursor-pointer ${
-                tab === t
-                  ? 'bg-om-accent text-om-base font-semibold'
-                  : 'text-om-muted hover:text-om-fg hover:bg-om-raised'
-              }`}
+              className="px-3 py-1 rounded text-xs font-mono transition-colors cursor-pointer"
+              style={tab === t
+                ? { background: 'rgba(201,194,180,0.12)', color: '#c9c2b4', border: '1px solid rgba(201,194,180,0.22)' }
+                : { color: '#798186', background: 'transparent', border: '1px solid transparent' }
+              }
+              onMouseEnter={e => { if (tab !== t) { e.currentTarget.style.color = '#cacccc'; e.currentTarget.style.background = '#1c2124' } }}
+              onMouseLeave={e => { if (tab !== t) { e.currentTarget.style.color = '#798186'; e.currentTarget.style.background = 'transparent' } }}
             >
               {t === 'main' ? 'main' : 'config'}
             </button>
           ))}
           <button
             onClick={() => setShowHelp((v) => !v)}
-            className="ml-1 w-7 h-7 rounded flex items-center justify-center text-xs font-mono transition-colors cursor-pointer text-om-muted hover:text-om-fg hover:bg-om-raised"
+            className="ml-1 w-7 h-7 rounded flex items-center justify-center text-xs font-mono transition-colors cursor-pointer"
+            style={{ color: '#798186', border: '1px solid transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#cacccc'; e.currentTarget.style.background = '#1c2124' }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#798186'; e.currentTarget.style.background = 'transparent' }}
             title="atajos de teclado (?)"
             aria-label="ayuda"
           >
@@ -313,7 +324,7 @@ export default function App() {
                   <PhaseSteps current={progress.phase} />
 
                   <div className="flex items-center gap-2 mb-2.5 mt-3">
-                    <span className="w-1.5 h-1.5 bg-om-cream rounded-full animate-pulse flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 bg-om-cream rounded-full animate-scan flex-shrink-0" />
                     <span className="text-xs text-om-fgmuted flex-1 truncate font-mono">{progress.message}</span>
                   </div>
                   <div className="w-full rounded-full h-1" style={{ background: 'rgba(75,78,85,0.35)' }}>

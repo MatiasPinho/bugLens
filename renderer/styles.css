@@ -39,23 +39,29 @@
   /* ── Severity badges ── */
   .badge-severity-critical {
     color: #de6145;
-    background: rgba(222, 97, 69, 0.10);
-    border: 1px solid rgba(222, 97, 69, 0.30);
+    background: rgba(222, 97, 69, 0.12);
+    border: 1px solid rgba(222, 97, 69, 0.35);
+    font-weight: 600;
+    letter-spacing: 0.03em;
   }
   .badge-severity-high {
     color: #c9a07a;
-    background: rgba(180, 130, 100, 0.10);
-    border: 1px solid rgba(180, 130, 100, 0.28);
+    background: rgba(180, 130, 100, 0.12);
+    border: 1px solid rgba(180, 130, 100, 0.32);
+    font-weight: 600;
+    letter-spacing: 0.03em;
   }
   .badge-severity-medium {
     color: #c9c2b4;
-    background: rgba(201, 194, 180, 0.08);
-    border: 1px solid rgba(201, 194, 180, 0.20);
+    background: rgba(201, 194, 180, 0.10);
+    border: 1px solid rgba(201, 194, 180, 0.25);
+    font-weight: 600;
+    letter-spacing: 0.03em;
   }
   .badge-severity-low {
     color: #9fa5a9;
     background: rgba(159, 165, 169, 0.08);
-    border: 1px solid rgba(159, 165, 169, 0.18);
+    border: 1px solid rgba(159, 165, 169, 0.20);
   }
 
   /* ── Category badge ── */
@@ -68,141 +74,148 @@
   /* ── Card ── */
   .card {
     background: #141719;
-    border: 1px solid rgba(93, 99, 103, 0.30);
-    border-radius: 6px;
+    border: 1px solid rgba(93, 99, 103, 0.28);
+    border-radius: 7px;
     padding: 1rem;
   }
 
   /* ── Section card (inside expanded detail) ── */
   .section-card {
-    background: rgba(20, 23, 25, 0.60);
-    border: 1px solid rgba(93, 99, 103, 0.22);
-    border-radius: 6px;
+    background: rgba(20, 23, 25, 0.70);
+    border: 1px solid rgba(93, 99, 103, 0.20);
+    border-radius: 7px;
     padding: 1rem;
   }
   .section-card-accent {
-    background: rgba(121, 129, 134, 0.06);
-    border: 1px solid rgba(121, 129, 134, 0.22);
-    border-radius: 6px;
+    background: rgba(201, 194, 180, 0.04);
+    border: 1px solid rgba(201, 194, 180, 0.16);
+    border-radius: 7px;
     padding: 1rem;
   }
 
   /* ── Section label ── */
   .section-label {
-    font-size: 0.65rem;
-    font-weight: 600;
+    font-size: 0.62rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.10em;
-    color: #5d6367;
+    letter-spacing: 0.12em;
+    color: #4b4e55;
     margin-bottom: 0.65rem;
   }
 
-  /* ── Buttons ── */
+  /* ── Primary button ── */
   .btn-primary {
     background: #c9c2b4;
     color: #101315;
-    font-weight: 600;
-    padding: 0.375rem 0.875rem;
+    font-weight: 700;
+    padding: 0.40rem 0.875rem;
     border-radius: 6px;
     border: 1px solid #c9c2b4;
-    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
     cursor: pointer;
+    letter-spacing: 0.02em;
   }
   .btn-primary:hover {
     background: #d9dbdc;
     border-color: #d9dbdc;
+    box-shadow: 0 0 0 3px rgba(201, 194, 180, 0.14);
   }
   .btn-primary:active {
     background: #b8b2a6;
     border-color: #b8b2a6;
   }
   .btn-primary:disabled {
-    opacity: 0.30;
+    opacity: 0.28;
     cursor: not-allowed;
+    box-shadow: none;
   }
   .btn-primary:focus-visible {
-    outline: 2px solid rgba(201, 194, 180, 0.60);
+    outline: 2px solid rgba(201, 194, 180, 0.55);
     outline-offset: 2px;
   }
 
+  /* ── Secondary button ── */
   .btn-secondary {
-    background: #1c2124;
-    color: #cacccc;
+    background: transparent;
+    color: #9fa5a9;
     font-weight: 500;
-    padding: 0.375rem 0.875rem;
+    padding: 0.40rem 0.875rem;
     border-radius: 6px;
-    border: 1px solid rgba(93, 99, 103, 0.40);
-    transition: background 0.15s, border-color 0.15s;
+    border: 1px solid rgba(93, 99, 103, 0.38);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
     cursor: pointer;
   }
   .btn-secondary:hover {
-    background: #222729;
-    border-color: rgba(121, 129, 134, 0.55);
+    background: #1c2124;
+    border-color: rgba(121, 129, 134, 0.50);
+    color: #cacccc;
   }
   .btn-secondary:active {
-    background: #272d30;
+    background: #222729;
   }
   .btn-secondary:disabled {
-    opacity: 0.30;
+    opacity: 0.28;
     cursor: not-allowed;
   }
   .btn-secondary:focus-visible {
-    outline: 2px solid rgba(121, 129, 134, 0.50);
+    outline: 2px solid rgba(121, 129, 134, 0.45);
     outline-offset: 2px;
   }
 
+  /* ── Danger button ── */
   .btn-danger {
-    background: rgba(222, 97, 69, 0.10);
+    background: rgba(222, 97, 69, 0.08);
     color: #de6145;
     font-weight: 500;
-    padding: 0.375rem 0.875rem;
+    padding: 0.40rem 0.875rem;
     border-radius: 6px;
-    border: 1px solid rgba(222, 97, 69, 0.28);
+    border: 1px solid rgba(222, 97, 69, 0.26);
     transition: background 0.15s, border-color 0.15s;
     cursor: pointer;
   }
   .btn-danger:hover {
-    background: rgba(222, 97, 69, 0.18);
-    border-color: rgba(222, 97, 69, 0.45);
+    background: rgba(222, 97, 69, 0.15);
+    border-color: rgba(222, 97, 69, 0.42);
   }
   .btn-danger:disabled {
-    opacity: 0.30;
+    opacity: 0.28;
     cursor: not-allowed;
   }
   .btn-danger:focus-visible {
-    outline: 2px solid rgba(222, 97, 69, 0.45);
+    outline: 2px solid rgba(222, 97, 69, 0.42);
     outline-offset: 2px;
   }
 
   /* ── Input / select ── */
   .input {
     background: #141719;
-    border: 1px solid rgba(93, 99, 103, 0.38);
+    border: 1px solid rgba(93, 99, 103, 0.35);
     border-radius: 6px;
     padding: 0.375rem 0.625rem;
     color: #cacccc;
     width: 100%;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
   .input::placeholder {
-    color: #4b4e55;
+    color: #343d41;
   }
   .input:focus {
     outline: none;
-    border-color: rgba(201, 194, 180, 0.45);
+    border-color: rgba(201, 194, 180, 0.50);
+    box-shadow: 0 0 0 3px rgba(201, 194, 180, 0.07);
   }
   .input:hover:not(:focus) {
-    border-color: rgba(93, 99, 103, 0.58);
+    border-color: rgba(93, 99, 103, 0.55);
   }
 
   /* ── Label ── */
   .label {
-    font-size: 0.70rem;
-    font-weight: 500;
+    font-size: 0.68rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #5d6367;
-    margin-bottom: 0.25rem;
+    letter-spacing: 0.10em;
+    color: #4b4e55;
+    margin-bottom: 0.28rem;
     display: block;
   }
 
@@ -210,7 +223,7 @@
   .code-block {
     background: #0d1013;
     border: 1px solid rgba(93, 99, 103, 0.22);
-    border-radius: 6px;
+    border-radius: 7px;
     overflow: hidden;
   }
   .code-block-header {
@@ -219,6 +232,36 @@
     gap: 0.5rem;
     padding: 0.375rem 0.75rem;
     background: #101315;
-    border-bottom: 1px solid rgba(93, 99, 103, 0.22);
+    border-bottom: 1px solid rgba(93, 99, 103, 0.18);
+  }
+
+  /* ── Severity row strips — colored left inset border ── */
+  .row-strip-critical { box-shadow: inset 3px 0 0 rgba(222, 97, 69, 0.80); }
+  .row-strip-high     { box-shadow: inset 3px 0 0 rgba(201, 144, 100, 0.70); }
+  .row-strip-medium   { box-shadow: inset 3px 0 0 rgba(201, 194, 180, 0.45); }
+  .row-strip-low      { box-shadow: inset 3px 0 0 rgba(159, 165, 169, 0.30); }
+
+  /* ── Focused row strip (brighter) ── */
+  .row-strip-critical-focused { box-shadow: inset 3px 0 0 rgba(222, 97, 69, 1); }
+  .row-strip-high-focused     { box-shadow: inset 3px 0 0 rgba(201, 144, 100, 0.95); }
+  .row-strip-medium-focused   { box-shadow: inset 3px 0 0 rgba(201, 194, 180, 0.75); }
+  .row-strip-low-focused      { box-shadow: inset 3px 0 0 rgba(159, 165, 169, 0.55); }
+
+  /* ── Fade-in animation ── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fadeInUp 0.18s ease-out forwards;
+  }
+
+  /* ── Scan pulse ── */
+  @keyframes scanPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+  }
+  .animate-scan {
+    animation: scanPulse 2.4s ease-in-out infinite;
   }
 }
