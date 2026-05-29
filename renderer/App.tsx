@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Settings from './components/Settings'
 import FileUpload from './components/FileUpload'
 import ProgressLog from './components/ProgressLog'
 import BugTable from './components/BugTable'
+import EmptyState from './components/EmptyState'
 import type { AnalyzedBug, IPCEvent, LogEvent, ProgressEvent, BugResultEvent, IndexProgressEvent } from '../src/types/index'
 
 type Tab = 'main' | 'settings'
@@ -127,6 +128,13 @@ export default function App() {
     }
   }, [excelPath, results, addLog])
 
+  // Bug seleccionado vía teclado (para j/k navigation + Enter/d shortcuts).
+  // null = nada seleccionado.
+  const [focusedBugId, setFocusedBugId] = useState<string | null>(null)
+  const [expandedBugId, setExpandedBugId] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null)
+
   // Deep analysis bajo demanda: marca el bug como 'deep_pending',
   // dispara el IPC, y reemplaza el análisis cuando vuelve.
   const handleDeepAnalysis = useCallback(async (bug: AnalyzedBug) => {
@@ -165,6 +173,70 @@ export default function App() {
     setProgress({ current: 0, total: 0, message: '' })
   }, [])
 
+  // ─── Keyboard shortcuts ────────────────────────────────────────────────────
+  // j/k: next/prev bug, Enter: expandir, Esc: cerrar, /: focus search, d: deep analysis del bug abierto, ?: help
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Ignorar si estamos escribiendo en un input/textarea/select
+      const target = e.target as HTMLElement
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'
+      if (isTyping && e.key !== 'Escape') return
+
+      // Solo activos en la tab main
+      if (tab !== 'main') return
+
+      switch (e.key) {
+        case '?':
+          if (e.shiftKey || target.tagName !== 'BODY') return
+          e.preventDefault()
+          setShowHelp((v) => !v)
+          break
+        case '/':
+          if (results.length === 0) return
+          e.preventDefault()
+          searchInputRef.current?.focus()
+          break
+        case 'Escape':
+          if (showHelp) { setShowHelp(false); break }
+          if (expandedBugId) { setExpandedBugId(null); break }
+          if (isTyping) (target as HTMLInputElement).blur()
+          break
+        case 'j': {
+          if (results.length === 0) return
+          e.preventDefault()
+          const idx = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
+          const next = results[Math.min(idx + 1, results.length - 1)] ?? results[0]
+          setFocusedBugId(next.enriched.raw.id)
+          break
+        }
+        case 'k': {
+          if (results.length === 0) return
+          e.preventDefault()
+          const idx = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
+          const prev = results[Math.max(idx - 1, 0)] ?? results[0]
+          setFocusedBugId(prev.enriched.raw.id)
+          break
+        }
+        case 'Enter': {
+          if (!focusedBugId) return
+          e.preventDefault()
+          setExpandedBugId((curr) => (curr === focusedBugId ? null : focusedBugId))
+          break
+        }
+        case 'd': {
+          if (!expandedBugId) return
+          const bug = results.find((r) => r.enriched.raw.id === expandedBugId)
+          if (!bug || bug.analysis.analysisStatus !== 'fast_completed') return
+          e.preventDefault()
+          handleDeepAnalysis(bug)
+          break
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [tab, results, focusedBugId, expandedBugId, showHelp, handleDeepAnalysis])
+
   return (
     <div className="flex flex-col h-screen bg-om-base text-om-fg">
       {/* Header */}
@@ -180,7 +252,7 @@ export default function App() {
           )}
         </div>
 
-        <nav className="flex gap-1">
+        <nav className="flex items-center gap-1">
           {(['main', 'settings'] as Tab[]).map((t) => (
             <button
               key={t}
@@ -194,6 +266,14 @@ export default function App() {
               {t === 'main' ? 'main' : 'config'}
             </button>
           ))}
+          <button
+            onClick={() => setShowHelp((v) => !v)}
+            className="ml-1 w-7 h-7 rounded flex items-center justify-center text-xs font-mono transition-colors cursor-pointer text-om-muted hover:text-om-fg hover:bg-om-raised"
+            title="atajos de teclado (?)"
+            aria-label="ayuda"
+          >
+            ?
+          </button>
         </nav>
       </header>
 
@@ -229,18 +309,10 @@ export default function App() {
 
               {phase === 'analyzing' && (
                 <div className="card">
-                  {progress.phase && (
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="text-xs font-mono uppercase tracking-wider" style={{ color: '#c9c2b4' }}>
-                        {progress.phase === 'reading_excel' ? 'leyendo excel'
-                          : progress.phase === 'reading_docs' ? 'leyendo docs'
-                          : progress.phase === 'fast_triage' ? 'triage rápido'
-                          : progress.phase === 'done' ? 'completado'
-                          : 'error'}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mb-2.5">
+                  {/* Pasos visuales — el segmento activo está iluminado */}
+                  <PhaseSteps current={progress.phase} />
+
+                  <div className="flex items-center gap-2 mb-2.5 mt-3">
                     <span className="w-1.5 h-1.5 bg-om-cream rounded-full animate-pulse flex-shrink-0" />
                     <span className="text-xs text-om-fgmuted flex-1 truncate font-mono">{progress.message}</span>
                   </div>
@@ -311,7 +383,16 @@ export default function App() {
               {results.length > 0 ? (
                 <div className="flex flex-col h-full">
                   <div className="flex-1 overflow-hidden">
-                    <BugTable results={results} analyzing={phase === 'analyzing'} onDeepAnalysis={handleDeepAnalysis} />
+                    <BugTable
+                      results={results}
+                      analyzing={phase === 'analyzing'}
+                      onDeepAnalysis={handleDeepAnalysis}
+                      focusedId={focusedBugId}
+                      expandedId={expandedBugId}
+                      onFocus={setFocusedBugId}
+                      onToggleExpand={(id) => setExpandedBugId((curr) => (curr === id ? null : id))}
+                      searchInputRef={searchInputRef}
+                    />
                   </div>
                   {showLogs && (
                     <div className="h-40 flex-shrink-0 border-t border-om-border/20">
@@ -319,15 +400,122 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : phase === 'analyzing' ? (
                 <div className="flex-1 overflow-hidden">
                   <ProgressLog logs={logs} />
+                </div>
+              ) : (
+                <div className="flex-1 overflow-hidden">
+                  <EmptyState hasExcel={!!excelPath} hasIndex={hasIndex} />
                 </div>
               )}
             </div>
           </div>
         )}
       </main>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+    </div>
+  )
+}
+
+// ─── Help modal ────────────────────────────────────────────────────────────────
+// Cheatsheet de atajos. Se abre con `?` y cierra con Esc o click afuera.
+
+function HelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(13,16,19,0.85)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded p-5 max-w-md w-full"
+        style={{ background: '#141719', border: '1px solid rgba(93,99,103,0.30)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-xs font-mono uppercase tracking-wider" style={{ color: '#c9c2b4' }}>atajos de teclado</span>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors"
+            style={{ color: '#798186' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#cacccc')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#798186')}
+            aria-label="cerrar"
+          >
+            <svg width="11" height="11" viewBox="0 0 10 10" fill="none">
+              <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-1.5">
+          <ShortcutRow keys={['j']} label="siguiente bug" />
+          <ShortcutRow keys={['k']} label="bug anterior" />
+          <ShortcutRow keys={['enter']} label="expandir / colapsar bug" />
+          <ShortcutRow keys={['esc']} label="cerrar detalle / modal" />
+          <ShortcutRow keys={['/']} label="enfocar búsqueda" />
+          <ShortcutRow keys={['d']} label="análisis profundo del bug abierto" />
+          <ShortcutRow keys={['?']} label="mostrar / ocultar esta ayuda" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1">
+      <span className="text-xs font-mono" style={{ color: '#9fa5a9' }}>{label}</span>
+      <div className="flex gap-1">
+        {keys.map((k, i) => (
+          <kbd key={i} className="px-1.5 py-0.5 rounded text-xs font-mono"
+            style={{
+              background: 'rgba(75,78,85,0.30)',
+              border: '1px solid rgba(93,99,103,0.30)',
+              color: '#c9c2b4',
+              minWidth: '1.4em',
+              textAlign: 'center',
+            }}>
+            {k}
+          </kbd>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Pasos visuales del pipeline. Cada chip se ilumina cuando es la fase activa,
+// los anteriores quedan en color completado, los futuros en gris.
+function PhaseSteps({ current }: { current?: import('../src/types/index').AnalysisPhase }) {
+  const steps: Array<{ key: import('../src/types/index').AnalysisPhase; label: string }> = [
+    { key: 'reading_excel', label: 'excel' },
+    { key: 'reading_docs',  label: 'docs' },
+    { key: 'fast_triage',   label: 'triage' },
+    { key: 'done',          label: 'listo' },
+  ]
+  const currentIdx = steps.findIndex((s) => s.key === current)
+  // Si la fase no aplica (todavía no se emitió), asumimos arrancando en 0
+  const activeIdx = currentIdx >= 0 ? currentIdx : 0
+
+  return (
+    <div className="flex items-center gap-1">
+      {steps.map((s, i) => {
+        const isPast    = i < activeIdx
+        const isCurrent = i === activeIdx && current !== 'done'
+        const isDone    = current === 'done' || isPast
+        const color = isCurrent ? '#c9c2b4' : isDone ? '#9fa5a9' : '#343d41'
+        return (
+          <div key={s.key} className="flex items-center flex-1 min-w-0 gap-1">
+            <div className="flex-1 h-0.5 rounded-full" style={{ background: color, opacity: isCurrent ? 1 : isDone ? 0.6 : 0.3 }} />
+            <span className="text-xs font-mono uppercase tracking-wider flex-shrink-0" style={{ color }}>
+              {s.label}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

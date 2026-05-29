@@ -5,6 +5,11 @@ interface Props {
   results: AnalyzedBug[]
   analyzing?: boolean
   onDeepAnalysis?: (bug: AnalyzedBug) => void
+  focusedId?:        string | null
+  expandedId?:       string | null
+  onFocus?:          (id: string | null) => void
+  onToggleExpand?:   (id: string) => void
+  searchInputRef?:   React.MutableRefObject<HTMLInputElement | null>
 }
 
 const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
@@ -68,6 +73,45 @@ function OmBadge({ style, children }: { style: { text: string; bg: string; borde
       {children}
     </span>
   )
+}
+
+// Pequeño indicador inline para distinguir bugs con fast triage vs deep analysis.
+// Crítico cuando se trabaja con varios bugs — antes había que abrir cada uno para saber.
+function AnalysisStatusPill({ status }: { status?: import('../../src/types/index').AnalysisStatus }) {
+  if (!status || status === 'fast_completed') return null  // no decoración para el caso default
+
+  if (status === 'deep_pending') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-mono"
+        style={{ color: '#c9c2b4' }}
+        title="análisis profundo en proceso">
+        <span className="w-1 h-1 rounded-full animate-pulse" style={{ background: '#c9c2b4' }} />
+        deep
+      </span>
+    )
+  }
+  if (status === 'deep_completed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-mono px-1 rounded"
+        style={{ color: '#9fa5a9', border: '1px solid rgba(159,165,169,0.30)' }}
+        title="análisis profundo completado">
+        <svg width="7" height="7" viewBox="0 0 12 12" fill="none">
+          <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        deep
+      </span>
+    )
+  }
+  if (status === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-mono"
+        style={{ color: '#de6145' }}
+        title="error durante el análisis">
+        ✗ error
+      </span>
+    )
+  }
+  return null
 }
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -181,8 +225,28 @@ function CodeBlock({ filePath, startLine, content, score }: {
 
 // ─── BugTable ─────────────────────────────────────────────────────────────────
 
-export default function BugTable({ results, analyzing = false, onDeepAnalysis }: Props) {
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+export default function BugTable({
+  results,
+  analyzing = false,
+  onDeepAnalysis,
+  focusedId: focusedIdProp,
+  expandedId: expandedIdProp,
+  onFocus,
+  onToggleExpand,
+  searchInputRef,
+}: Props) {
+  // Si el parent maneja expandedId (vía keyboard), usamos ese. Si no, mantenemos estado local.
+  const [localExpandedId, setLocalExpandedId] = useState<string | null>(null)
+  const expandedId = expandedIdProp !== undefined ? expandedIdProp : localExpandedId
+  const setExpandedId = (id: string | null) => {
+    if (onToggleExpand) {
+      if (id !== null) onToggleExpand(id)
+    } else {
+      setLocalExpandedId(id)
+    }
+  }
+  const focusedId = focusedIdProp
+
   const [filterCategory, setFilterCategory] = useState<BugCategory | 'all'>('all')
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -221,7 +285,8 @@ export default function BugTable({ results, analyzing = false, onDeepAnalysis }:
             <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
           </svg>
           <input
-            type="text" placeholder="buscar bugs..."
+            ref={searchInputRef}
+            type="text" placeholder="buscar bugs... (/)"
             value={search} onChange={(e) => setSearch(e.target.value)}
             className="input text-xs w-44"
             style={{ paddingLeft: '1.5rem' }}
@@ -281,6 +346,7 @@ export default function BugTable({ results, analyzing = false, onDeepAnalysis }:
             {filtered.map((r) => {
               const id = r.enriched.raw.id
               const isExpanded = expandedId === id
+              const isFocused  = focusedId === id
               const diff = difficultyStyle[r.analysis.difficulty] ?? difficultyStyle['medium']
               const sv = severityStyle[r.analysis.severity]
               const ct = categoryStyle[r.analysis.category]
@@ -288,19 +354,24 @@ export default function BugTable({ results, analyzing = false, onDeepAnalysis }:
               return (
                 <React.Fragment key={id}>
                   <tr
-                    onClick={() => setExpandedId(isExpanded ? null : id)}
+                    ref={(el) => { if (el && isFocused) el.scrollIntoView({ block: 'nearest' }) }}
+                    onClick={() => { onFocus?.(id); setExpandedId(isExpanded ? null : id) }}
+                    onMouseEnter={(e) => { onFocus?.(id); if (!isExpanded) e.currentTarget.style.background = 'rgba(28,33,36,0.80)' }}
+                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = isFocused ? 'rgba(201,194,180,0.04)' : 'transparent' }}
                     className="cursor-pointer"
                     style={{
                       borderBottom: '1px solid rgba(93,99,103,0.12)',
-                      background: isExpanded ? '#141719' : 'transparent',
+                      background: isExpanded ? '#141719' : isFocused ? 'rgba(201,194,180,0.04)' : 'transparent',
+                      boxShadow: isFocused ? 'inset 2px 0 0 #c9c2b4' : undefined,
                       transition: 'background 0.12s',
                     }}
-                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'rgba(28,33,36,0.80)' }}
-                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent' }}
                   >
                     <td className="px-4 py-2.5 font-mono" style={{ color: '#343d41' }}>{r.enriched.raw.rowIndex}</td>
                     <td className="px-4 py-2.5 max-w-xs">
-                      <div className="font-medium truncate" style={{ color: '#cacccc' }}>{r.enriched.raw.title}</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="font-medium truncate" style={{ color: '#cacccc' }}>{r.enriched.raw.title}</div>
+                        <AnalysisStatusPill status={r.analysis.analysisStatus} />
+                      </div>
                       <div className="truncate mt-0.5 font-mono" style={{ color: '#4b4e55' }}>{r.analysis.summary}</div>
                       {r.analysis.needsMoreInfo && (
                         <span className="text-xs font-mono" style={{ color: '#c9a07a' }}>⚠ más info</span>
@@ -757,7 +828,47 @@ function FastTriageView({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
 
   return (
     <div className="p-5 space-y-3" style={{ background: 'rgba(16,19,21,0.70)' }}>
-      <SectionCard title="triage rápido" accent>
+      {/* CTA del deep analysis arriba — es la acción esperada cuando el usuario abre un bug */}
+      {onDeepAnalysis && (
+        <div className="rounded p-3 flex items-start gap-3"
+          style={{ background: 'rgba(201,194,180,0.06)', border: '1px solid rgba(201,194,180,0.22)' }}>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider mb-1" style={{ color: '#c9c2b4' }}>
+              análisis profundo disponible
+            </div>
+            <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>
+              esto es solo un triage. el análisis profundo agrega:{' '}
+              <span style={{ color: '#c9c2b4' }}>hipótesis ranqueadas</span>,{' '}
+              <span style={{ color: '#c9c2b4' }}>inconsistencias</span>,{' '}
+              <span style={{ color: '#c9c2b4' }}>snippets de código</span>,{' '}
+              <span style={{ color: '#c9c2b4' }}>fix condicionado</span> y{' '}
+              <span style={{ color: '#c9c2b4' }}>recomendación final</span>.
+              <span style={{ color: '#4b4e55' }}>{' '}tarda ~90s.</span>
+            </p>
+          </div>
+          <button
+            onClick={() => onDeepAnalysis(result)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2"
+            style={{
+              background: '#c9c2b4',
+              color: '#0d1013',
+              border: '1px solid #c9c2b4',
+              fontWeight: 500,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#d6cfc1' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#c9c2b4' }}
+            title="generar análisis profundo (d)"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <span className="text-xs font-mono">analizar</span>
+          </button>
+        </div>
+      )}
+
+      <SectionCard title="triage rápido">
         <div className="space-y-2">
           <div>
             <div className="label">resumen</div>
@@ -813,33 +924,6 @@ function FastTriageView({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
           </>
         )}
       </div>
-
-      {/* CTA principal: generar análisis profundo */}
-      {onDeepAnalysis && (
-        <button
-          onClick={() => onDeepAnalysis(result)}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded transition-colors cursor-pointer"
-          style={{
-            background: 'rgba(201,194,180,0.08)',
-            border: '1px solid rgba(201,194,180,0.30)',
-            color: '#c9c2b4',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(201,194,180,0.14)'
-            e.currentTarget.style.borderColor = 'rgba(201,194,180,0.50)'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(201,194,180,0.08)'
-            e.currentTarget.style.borderColor = 'rgba(201,194,180,0.30)'
-          }}
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          <span className="text-xs font-mono">generar análisis profundo</span>
-        </button>
-      )}
 
       {/* Datos originales en colapsable */}
       <details className="group">
