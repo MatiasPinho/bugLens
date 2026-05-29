@@ -240,7 +240,10 @@ export default function BugTable({
   const expandedId = expandedIdProp !== undefined ? expandedIdProp : localExpandedId
   const setExpandedId = (id: string | null) => {
     if (onToggleExpand) {
-      if (id !== null) onToggleExpand(id)
+      // El parent expone toggle, no set. Para CERRAR pasamos el id actualmente abierto
+      // (toggle sobre sí mismo lo cierra). Para abrir/cambiar pasamos el nuevo id.
+      if (id === null && expandedId) onToggleExpand(expandedId)
+      else if (id !== null) onToggleExpand(id)
     } else {
       setLocalExpandedId(id)
     }
@@ -416,7 +419,7 @@ export default function BugTable({
                           boxShadow:    'inset 3px 0 0 #c9c2b4',
                           background:   '#0d1013',
                         }}>
-                        <ExpandedDetail result={r} onDeepAnalysis={onDeepAnalysis} />
+                        <ExpandedDetail result={r} onDeepAnalysis={onDeepAnalysis} onClose={() => setExpandedId(null)} />
                       </td>
                     </tr>
                   )}
@@ -462,7 +465,7 @@ export default function BugTable({
 
 // ─── Expanded detail ──────────────────────────────────────────────────────────
 
-function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDeepAnalysis?: (bug: AnalyzedBug) => void }) {
+function ExpandedDetail({ result, onDeepAnalysis, onClose }: { result: AnalyzedBug; onDeepAnalysis?: (bug: AnalyzedBug) => void; onClose?: () => void }) {
   const { enriched, analysis } = result
   const raw = enriched.raw
   const diff = difficultyStyle[analysis.difficulty] ?? difficultyStyle['medium']
@@ -492,7 +495,33 @@ function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
           )}
           <OmBadge style={sv}>{analysis.severity}</OmBadge>
           <OmBadge style={{ text: diff.text, bg: diff.bg, border: diff.border }}>{diff.label}</OmBadge>
-          <div className="ml-1"><ConfidenceBar value={analysis.confidence} /></div>
+          <div className="ml-1 mr-2"><ConfidenceBar value={analysis.confidence} /></div>
+          {/* Botón de cerrar — explícito + accesible (también funciona Esc o click en la fila) */}
+          {onClose && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onClose() }}
+              className="flex items-center gap-1.5 px-2 py-1 rounded transition-colors cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2"
+              style={{
+                color: '#798186',
+                border: '1px solid rgba(93,99,103,0.30)',
+                background: 'transparent',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#cacccc'; e.currentTarget.style.borderColor = 'rgba(121,129,134,0.50)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#798186'; e.currentTarget.style.borderColor = 'rgba(93,99,103,0.30)' }}
+              title="cerrar (esc)"
+              aria-label="cerrar detalle"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <span className="text-xs font-mono">cerrar</span>
+              <kbd className="px-1 py-0.5 rounded text-xs font-mono"
+                style={{ background: 'rgba(75,78,85,0.30)', border: '1px solid rgba(93,99,103,0.30)', color: '#4b4e55', fontSize: '0.6rem' }}>
+                esc
+              </kbd>
+            </button>
+          )}
         </div>
       </div>
 
