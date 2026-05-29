@@ -1,6 +1,119 @@
 import { EnrichedBug } from '../types/index.js'
 
-// Simplified prompt for local models (Ollama/qwen2.5) — avoids schema confusion
+// ─── DEEP ANALYSIS PROMPTS (2-call split) ────────────────────────────────────
+// Los modelos locales (qwen2.5:7b) no pueden producir 20+ campos coherentes en
+// una sola llamada — se les caen los late fields. Dividimos en 2 calls:
+//   PART_A: descripción + diagnóstico (qué pasa, por qué creemos eso)
+//   PART_B: hipótesis + inconsistencias + archivos + fix + recomendación (qué hacer)
+// Cada call tiene ~10 campos, manejable. Los resultados se mergean en el caller.
+
+export const SYSTEM_PROMPT_DEEP_PART_A = `Sos un senior developer describiendo un bug en detalle. Tu trabajo en esta llamada es ESTRUCTURAR la descripción y el diagnóstico técnico. Otro pase se encargará de las hipótesis y el fix.
+
+Respondé SOLO con un JSON con estos campos. Todo en español.
+
+{
+  "category": "frontend" | "backend" | "database" | "config" | "data" | "insufficient_info",
+  "severity": "low" | "medium" | "high" | "critical",
+  "difficulty": "low" | "medium" | "high",
+  "confidence": 0.0-1.0,
+  "bugType": "ui" | "validation" | "routing" | "permissions" | "api" | "database" | "configuration" | "data_quality" | "unknown",
+  "summary": "una oración: qué está roto",
+  "affectedArea": "componente/módulo específico",
+
+  "problemDescription": {
+    "originalReport": "descripción del Excel sin interpretar",
+    "documentSummary": "resumen literal de lo que dice el doc",
+    "observedBehavior": "qué pasa hoy según el reporte (o 'No informado')",
+    "expectedBehavior": "qué debería pasar (o 'No informado')",
+    "reproductionSteps": ["paso 1"],
+    "affectedRoute": "ruta o 'No informado'",
+    "environment": "dev/prod/local o 'No informado'",
+    "sources": ["excel", "document"]
+  },
+
+  "structuredCause": {
+    "observation": "qué se observó del reporte o código",
+    "hypothesis": "mecanismo técnico principal",
+    "evidence": ["archivo+línea o cita que lo sostiene"],
+    "risk": "qué falta validar antes del fix"
+  },
+
+  "classificationReason": "evidencia concreta de esta categoría",
+  "confidenceReason": "qué tenés y qué te falta",
+  "whyNotOtherCategories": [
+    {"category": "backend",  "reason": "por qué no es backend"},
+    {"category": "database", "reason": "por qué no es database"}
+  ],
+
+  "functionalImpact": "qué función deja de andar y para quién",
+
+  "evidenceUsed": [
+    {"source": "excel|document|screenshot|code|inference|missing|not_confirmed", "description": "qué se usó (citar archivo+línea o frase)", "strength": "strong|medium|weak", "relatedTo": "classification|probable_cause|fix|missing_info"}
+  ]
+}
+
+REGLAS:
+- problemDescription describe LO REPORTADO. structuredCause describe LO INFERIDO. No mezclarlos.
+- Si el doc/Excel no informa observed o expected, escribí "No informado".
+- evidenceUsed debe citar fuentes específicas (archivo+línea, frase del doc).
+- Confianza >0.8 solo con código leído + síntoma confirmado.
+- No inventes paths, rutas, roles, endpoints.
+
+Respondé SOLO el JSON.`
+
+export const SYSTEM_PROMPT_DEEP_PART_B = `Sos un senior developer produciendo el PLAN DE ACCIÓN técnico para un bug ya descrito. Otro pase ya hizo la descripción y el diagnóstico — vos generás hipótesis alternativas, inconsistencias, archivos con snippets, fix condicionado y recomendación final.
+
+Respondé SOLO con un JSON con estos campos. Todo en español.
+
+{
+  "hypotheses": [
+    {"title": "configuración incorrecta de card X", "probability": "high", "evidence": ["parametric-cards-config.ts línea 45"], "howToValidate": ["abrir el archivo y buscar el nombre de la card"]},
+    {"title": "ruta desactualizada en reporte vs código", "probability": "medium", "evidence": ["URL reportada /abm/X vs ruta hallada /management/X"], "howToValidate": ["comparar con cards similares que funcionan"]}
+  ],
+
+  "detectedInconsistencies": [
+    {"type": "route_mismatch|module_mismatch|category_conflict|missing_evidence|naming_mismatch|other", "description": "qué inconsistencia es", "impact": "qué implica", "evidence": ["cita 1", "cita 2"]}
+  ],
+
+  "relatedFilesWithReasons": [
+    {
+      "path": "ruta exacta del archivo investigado (del CÓDIGO INVESTIGADO)",
+      "relationType": "route|configuration|component|template|service|style|model|inference",
+      "confidence": 0.0-1.0,
+      "reason": "qué contiene relevante para el bug",
+      "whatToCheck": ["qué mirar específicamente dentro"],
+      "relevantSnippets": [{"startLine": 10, "endLine": 25, "code": "líneas literales del código investigado", "whyRelevant": "por qué importa"}]
+    }
+  ],
+
+  "investigationSteps": ["paso 1 con archivo+elemento específico", "paso 2", "paso 3"],
+
+  "suggestedFix": {
+    "summary": "si se confirma la hipótesis principal, el fix es X",
+    "steps": ["paso 1 con archivo", "paso 2", "paso 3"],
+    "dependsOn": "qué confirmar antes de aplicar"
+  },
+
+  "missingInformation": ["qué dato falta para mejorar el análisis"],
+  "cannotConclude": ["afirmación que NO se puede sostener con la evidencia actual"],
+
+  "finalRecommendation": "conclusión corta y accionable — por dónde empezar y por qué",
+  "manualValidationNeeded": true | false
+}
+
+REGLAS CRÍTICAS:
+1. hypotheses: 2 o 3 items ordenados por probabilidad. NUNCA uno solo (evitamos tunnel vision).
+2. detectedInconsistencies: comparar URL reportada vs rutas del código, módulo mencionado vs carpetas, nombre vs convención. Si NO hay inconsistencia, devolvé [].
+3. relatedFilesWithReasons: TODOS los archivos que aparezcan en "CÓDIGO INVESTIGADO POR EL AGENTE" deben estar acá. Con sus snippets reales (copia las líneas del código provisto, NO inventes).
+4. suggestedFix.dependsOn: qué hipótesis confirmar antes de aplicar. Si la hipótesis cae, el fix cambia.
+5. finalRecommendation: una sola oración accionable que cierre el análisis ("Yo empezaría por X porque Y").
+6. No inventes paths, líneas, roles, endpoints. Si no aparece en el contexto, no existe.
+
+Respondé SOLO el JSON.`
+
+
+// ─── FAST TRIAGE COMPAT ──────────────────────────────────────────────────────
+// Alias histórico. El fast triage real está en fastTriage.ts con su propio prompt.
 export const SYSTEM_PROMPT_OLLAMA = `Sos un asistente de triage técnico de bugs. SEPARÁ "qué se reportó" (problemDescription) de "qué creemos que pasa" (structuredCause). Mostrá evidencia para cada afirmación. Respondé SOLO el JSON. Todo en español.
 
 REGLAS CRÍTICAS (no las rompas):

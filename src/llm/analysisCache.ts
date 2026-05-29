@@ -16,7 +16,7 @@ import * as crypto from 'crypto'
 import type { EnrichedBug, BugTriage, BugAnalysis, LLMConfig } from '../types/index.js'
 
 // Bump cuando cambia un prompt — invalida cache vieja para forzar recálculo.
-const PROMPT_VERSION = 'v3-2025-05'
+const PROMPT_VERSION = 'v4-2025-05-deep'
 
 // ─── Key generation ──────────────────────────────────────────────────────────
 

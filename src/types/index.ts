@@ -77,12 +77,48 @@ export interface EvidenceItem {
   relatedTo?: EvidenceRelation              // a qué parte del análisis aplica
 }
 
+// Snippet concreto leído del repo durante el agent loop.
+// Lo guardamos atado al archivo para mostrarlo bajo el path correspondiente.
+export interface RelevantSnippet {
+  startLine: number
+  endLine: number
+  code: string                              // contenido literal de las líneas
+  whyRelevant: string                       // por qué el agente lo considera relevante
+}
+
 export interface RelatedFileWithReason {
   path: string
   reason: string
   relationType?: string                     // route | configuration | component | template | service | style | model | inference
   confidence?: number                       // 0–1
   whatToCheck?: string[]                    // qué mirar dentro de ese archivo
+  relevantSnippets?: RelevantSnippet[]      // fragmentos concretos extraídos del archivo
+}
+
+// Inconsistencia entre lo reportado y lo encontrado en el código.
+// Crítico para detectar discrepancias que un dev necesita ver primero.
+export interface DetectedInconsistency {
+  type: 'route_mismatch' | 'module_mismatch' | 'category_conflict' | 'missing_evidence' | 'naming_mismatch' | 'other'
+  description: string                       // qué inconsistencia es
+  impact: string                            // qué implica para el diagnóstico
+  evidence: string[]                        // citas que la sostienen
+}
+
+// Hipótesis alternativa con probabilidad y forma de validarla.
+// El deep analysis debe ofrecer 2-3 — no una sola — para evitar tunnel vision.
+export interface Hypothesis {
+  title: string                             // resumen corto de la hipótesis
+  probability: 'high' | 'medium' | 'low'
+  evidence: string[]                        // qué la sostiene
+  howToValidate: string[]                   // pasos concretos para confirmarla o descartarla
+}
+
+// Fix sugerido condicionado a la hipótesis principal.
+// dependsOn aclara qué confirmar antes de aplicarlo.
+export interface SuggestedFix {
+  summary: string                           // qué hacer si se confirma la hipótesis principal
+  steps: string[]                           // pasos concretos del fix
+  dependsOn: string                         // qué confirmar antes de tocar nada
 }
 
 export interface CategoryDiscarded {
@@ -159,15 +195,23 @@ export interface BugAnalysis {
   probableCause: string                     // string legacy — derivado de structuredCause si está
   structuredCause?: StructuredCause         // versión estructurada (preferida)
 
-  suggestedFixSteps: string[]               // pasos concretos del fix
+  suggestedFixSteps: string[]               // pasos concretos del fix (legacy / flat)
   investigationSteps: string[]              // pasos ordenados para llegar al bug
   evidenceUsed: EvidenceItem[]              // fuentes usadas con badge
 
   cannotConclude: string[]                  // qué NO se puede afirmar
   missingInformation?: string[]             // qué información falta
 
-  relatedFilesWithReasons: RelatedFileWithReason[]  // archivos + motivo + qué revisar
+  relatedFilesWithReasons: RelatedFileWithReason[]  // archivos + motivo + qué revisar + snippets
   relatedFiles: string[]                    // derivado de relatedFilesWithReasons (compat)
+
+  // ─── Campos exclusivos del deep analysis ────────────────────────────────────
+  // Se llenan solo cuando analysisStatus === 'deep_completed'. La UI los muestra
+  // solo si vienen presentes — el fast triage NO los produce.
+  detectedInconsistencies?: DetectedInconsistency[]  // discrepancias reportado vs encontrado
+  hypotheses?: Hypothesis[]                          // 2-3 hipótesis ordenadas por probabilidad
+  suggestedFix?: SuggestedFix                        // fix estructurado con dependsOn
+  finalRecommendation?: string                       // conclusión corta y accionable
 
   manualValidationNeeded?: boolean          // requiere reproducción manual
   needsMoreInfo: boolean

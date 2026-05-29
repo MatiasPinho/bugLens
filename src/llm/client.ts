@@ -1,10 +1,12 @@
 import { LLMConfig, LLMProvider, BugAnalysis } from '../types/index.js'
-import { SYSTEM_PROMPT_OLLAMA, buildUserPrompt } from '../prompts/bugClassifier.js'
+import { SYSTEM_PROMPT_DEEP_PART_A, SYSTEM_PROMPT_DEEP_PART_B, buildUserPrompt } from '../prompts/bugClassifier.js'
 import { makeCacheKey, loadCachedAnalysis, saveCachedAnalysis } from './analysisCache.js'
 
-// Single unified system prompt — same expectations for local and cloud models.
-// Cloud LLMs handle the schema fine; local models need the structure to be explicit.
-const SYSTEM_PROMPT = SYSTEM_PROMPT_OLLAMA
+// callLLM acepta un systemPrompt opcional — el deep analysis hace 2 calls con
+// prompts distintos (PART_A descriptivo, PART_B analítico) para evitar que
+// qwen2.5:7b se ahogue con un schema de 20+ campos en una sola pasada.
+// Default sigue siendo PART_A para no romper otros callers.
+const DEFAULT_SYSTEM_PROMPT = SYSTEM_PROMPT_DEEP_PART_A
 import { EnrichedBug } from '../types/index.js'
 import { runAgentInvestigation } from './agentLoop.js'
 
@@ -54,19 +56,20 @@ function getApiKey(provider: LLMProvider): string | undefined {
 export async function callLLM(
   prompt: string,
   config: LLMConfig,
-  images?: Array<{ data: string; mimeType: string; alt?: string }>
+  images?: Array<{ data: string; mimeType: string; alt?: string }>,
+  systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
 ): Promise<string> {
   switch (config.provider) {
-    case 'ollama': return callOllama(prompt, config)
-    case 'anthropic': return callAnthropic(prompt, config, images)
-    case 'gemini': return callGemini(prompt, config)
-    case 'openai': return callOpenAI(prompt, config)
+    case 'ollama': return callOllama(prompt, config, systemPrompt)
+    case 'anthropic': return callAnthropic(prompt, config, images, systemPrompt)
+    case 'gemini': return callGemini(prompt, config, systemPrompt)
+    case 'openai': return callOpenAI(prompt, config, systemPrompt)
   }
 }
 
 // ─── Provider implementations ─────────────────────────────────────────────────
 
-async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
+async function callOllama(prompt: string, config: LLMConfig, systemPrompt: string = DEFAULT_SYSTEM_PROMPT): Promise<string> {
   const baseUrl = config.baseUrl ?? 'http://localhost:11434'
   const model = config.model ?? 'mistral'
 
@@ -82,7 +85,7 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
       num_predict: config.maxTokens ?? 4096,
     },
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT_OLLAMA },
+      { role: 'system', content: systemPrompt },
       { role: 'user',   content: prompt },
     ],
   }
@@ -106,7 +109,7 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
   return text.trim()
 }
 
-async function callAnthropic(prompt: string, config: LLMConfig, images?: Array<{ data: string; mimeType: string; alt?: string }>): Promise<string> {
+async function callAnthropic(prompt: string, config: LLMConfig, images?: Array<{ data: string; mimeType: string; alt?: string }>, systemPrompt: string = DEFAULT_SYSTEM_PROMPT): Promise<string> {
   if (!config.apiKey) throw new Error('ANTHROPIC_API_KEY no configurada')
 
   const { Anthropic } = await import('@anthropic-ai/sdk')
@@ -142,7 +145,7 @@ async function callAnthropic(prompt: string, config: LLMConfig, images?: Array<{
   const message = await client.messages.create({
     model: config.model ?? 'claude-sonnet-4-6',
     max_tokens: config.maxTokens ?? 4096,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: [{ role: 'user', content: userContent as any }],
     temperature: config.temperature ?? 0.1,
@@ -153,7 +156,7 @@ async function callAnthropic(prompt: string, config: LLMConfig, images?: Array<{
   return content.text.trim()
 }
 
-async function callGemini(prompt: string, config: LLMConfig): Promise<string> {
+async function callGemini(prompt: string, config: LLMConfig, systemPrompt: string = DEFAULT_SYSTEM_PROMPT): Promise<string> {
   if (!config.apiKey) throw new Error('GEMINI_API_KEY no configurada')
 
   const { GoogleGenerativeAI } = await import('@google/generative-ai')
@@ -161,7 +164,7 @@ async function callGemini(prompt: string, config: LLMConfig): Promise<string> {
 
   const model = genAI.getGenerativeModel({
     model: config.model ?? 'gemini-2.5-flash',
-    systemInstruction: SYSTEM_PROMPT,
+    systemInstruction: systemPrompt,
     generationConfig: {
       temperature: config.temperature ?? 0.1,
       maxOutputTokens: config.maxTokens ?? 4096,
@@ -188,7 +191,7 @@ async function callGemini(prompt: string, config: LLMConfig): Promise<string> {
   throw new Error('Gemini: máximo de reintentos alcanzado')
 }
 
-async function callOpenAI(prompt: string, config: LLMConfig): Promise<string> {
+async function callOpenAI(prompt: string, config: LLMConfig, systemPrompt: string = DEFAULT_SYSTEM_PROMPT): Promise<string> {
   if (!config.apiKey) throw new Error('OPENAI_API_KEY no configurada')
 
   const { OpenAI } = await import('openai')
@@ -197,7 +200,7 @@ async function callOpenAI(prompt: string, config: LLMConfig): Promise<string> {
   const completion = await client.chat.completions.create({
     model: config.model ?? 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt },
     ],
     temperature: config.temperature ?? 0.1,
@@ -305,6 +308,83 @@ function parseWhyNotOther(val: unknown): BugAnalysis['whyNotOtherCategories'] | 
   return out.length > 0 ? out : undefined
 }
 
+// ─── New deep-only parsers ───────────────────────────────────────────────────
+
+const VALID_INCONSISTENCY_TYPES = new Set([
+  'route_mismatch', 'module_mismatch', 'category_conflict',
+  'missing_evidence', 'naming_mismatch', 'other',
+])
+const VALID_PROBABILITIES = new Set(['high', 'medium', 'low'])
+
+function parseSnippets(val: unknown): BugAnalysis['relatedFilesWithReasons'][0]['relevantSnippets'] {
+  if (!Array.isArray(val)) return undefined
+  const out: NonNullable<BugAnalysis['relatedFilesWithReasons'][0]['relevantSnippets']> = []
+  for (const item of val) {
+    if (typeof item !== 'object' || item === null) continue
+    const i = item as Record<string, unknown>
+    const start = Number(i['startLine'])
+    const end   = Number(i['endLine'])
+    const code  = String(i['code'] ?? '')
+    if (!code.trim()) continue
+    out.push({
+      startLine: isNaN(start) ? 1 : start,
+      endLine:   isNaN(end)   ? start : end,
+      code,
+      whyRelevant: String(i['whyRelevant'] ?? ''),
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
+
+function parseInconsistencies(val: unknown): BugAnalysis['detectedInconsistencies'] {
+  if (!Array.isArray(val)) return undefined
+  const out: NonNullable<BugAnalysis['detectedInconsistencies']> = []
+  for (const item of val) {
+    if (typeof item !== 'object' || item === null) continue
+    const i = item as Record<string, unknown>
+    const type = String(i['type'] ?? 'other')
+    if (!i['description']) continue
+    out.push({
+      type: (VALID_INCONSISTENCY_TYPES.has(type) ? type : 'other') as NonNullable<BugAnalysis['detectedInconsistencies']>[0]['type'],
+      description: String(i['description']),
+      impact: String(i['impact'] ?? ''),
+      evidence: toStringArray(i['evidence']),
+    })
+  }
+  return out.length > 0 ? out : undefined
+}
+
+function parseHypotheses(val: unknown): BugAnalysis['hypotheses'] {
+  if (!Array.isArray(val)) return undefined
+  const out: NonNullable<BugAnalysis['hypotheses']> = []
+  for (const item of val) {
+    if (typeof item !== 'object' || item === null) continue
+    const i = item as Record<string, unknown>
+    const prob = String(i['probability'] ?? 'medium')
+    if (!i['title']) continue
+    out.push({
+      title: String(i['title']),
+      probability: (VALID_PROBABILITIES.has(prob) ? prob : 'medium') as NonNullable<BugAnalysis['hypotheses']>[0]['probability'],
+      evidence: toStringArray(i['evidence']),
+      howToValidate: toStringArray(i['howToValidate']),
+    })
+  }
+  // Ordenar high → medium → low (estable)
+  const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
+  out.sort((a, b) => rank[a.probability] - rank[b.probability])
+  return out.length > 0 ? out : undefined
+}
+
+function parseSuggestedFix(val: unknown): BugAnalysis['suggestedFix'] {
+  if (typeof val !== 'object' || val === null) return undefined
+  const f = val as Record<string, unknown>
+  const summary  = String(f['summary']   ?? '')
+  const steps    = toStringArray(f['steps'])
+  const dependsOn = String(f['dependsOn'] ?? '')
+  if (!summary && steps.length === 0) return undefined
+  return { summary, steps, dependsOn }
+}
+
 // Derive a human-readable probableCause string from the structured form.
 // Used as fallback when the model only provided structuredCause.
 function deriveProbableCauseString(c: BugAnalysis['structuredCause']): string {
@@ -357,6 +437,7 @@ function validateAnalysis(obj: unknown): BugAnalysis {
           relationType: i['relationType'] ? String(i['relationType']) : undefined,
           confidence: !isNaN(conf) && conf >= 0 && conf <= 1 ? conf : undefined,
           whatToCheck: toStringArray(i['whatToCheck']).length > 0 ? toStringArray(i['whatToCheck']) : undefined,
+          relevantSnippets: parseSnippets(i['relevantSnippets']),
         })
       } else if (typeof item === 'string' && item) {
         relatedFilesWithReasons.push({ path: item, reason: '' })
@@ -422,6 +503,12 @@ function validateAnalysis(obj: unknown): BugAnalysis {
     relatedFilesWithReasons,
     relatedFiles,
 
+    // ─── Deep-only fields ──────────────────────────────────────────────────
+    detectedInconsistencies: parseInconsistencies(o['detectedInconsistencies']),
+    hypotheses: parseHypotheses(o['hypotheses']),
+    suggestedFix: parseSuggestedFix(o['suggestedFix']),
+    finalRecommendation: o['finalRecommendation'] ? String(o['finalRecommendation']) : undefined,
+
     manualValidationNeeded: typeof o['manualValidationNeeded'] === 'boolean'
       ? o['manualValidationNeeded'] : undefined,
     needsMoreInfo: Boolean(o['needsMoreInfo']),
@@ -435,6 +522,43 @@ function validateAnalysis(obj: unknown): BugAnalysis {
  * uses grep/read_file tools to navigate the repo), then does the final analysis.
  * Retries once if the response isn't valid JSON.
  */
+// Helper: corre una sola llamada LLM con reintento, devuelve el JSON parseado crudo.
+async function runLLMCall(
+  prompt:       string,
+  systemPrompt: string,
+  config:       LLMConfig,
+  images:       Array<{ data: string; mimeType: string; alt?: string }> | undefined,
+  label:        string,
+  sendLog?:     (msg: string) => void,
+): Promise<Record<string, unknown>> {
+  let lastErr: Error | null = null
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const raw = await callLLM(prompt, config, images, systemPrompt)
+      const json = JSON.parse(extractJSON(raw)) as Record<string, unknown>
+      return json
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err))
+      sendLog?.(`  [${label}] intento ${attempt} falló: ${lastErr.message}`)
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  throw lastErr ?? new Error(`${label}: failed after retries`)
+}
+
+// Merge: combina los JSONs de las 2 llamadas en un único objeto para validateAnalysis.
+// Si una llamada da un campo y la otra el mismo, gana la que lo definió no-vacío.
+function mergeDeepResults(partA: Record<string, unknown>, partB: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...partA }
+  for (const [k, v] of Object.entries(partB)) {
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v === '') continue
+    if (Array.isArray(v) && v.length === 0 && merged[k]) continue
+    merged[k] = v
+  }
+  return merged
+}
+
 export async function analyzeBug(
   enriched:  EnrichedBug,
   config:    LLMConfig,
@@ -466,22 +590,24 @@ export async function analyzeBug(
     }
   }
 
-  // Phase 2: final structured analysis with gathered evidence
+  // Phase 2: ANÁLISIS EN 2 LLAMADAS
+  // - PART A: descripción + diagnóstico (problemDescription, structuredCause, evidence, classification)
+  // - PART B: plan accionable (hypotheses, inconsistencies, files+snippets, fix, recommendation)
+  // Cada call tiene ~10 campos, manejable para qwen2.5:7b. Luego mergeamos.
   const userPrompt = buildUserPrompt(enriched, gatheredCode)
-
-  // Collect images from Google Docs for vision-capable providers
-  const allImages = enriched.googleDocs
-    .flatMap((d) => d.images ?? [])
-    .slice(0, 4)
+  const allImages = enriched.googleDocs.flatMap((d) => d.images ?? []).slice(0, 4)
+  const imgs = allImages.length > 0 ? allImages : undefined
 
   let lastError: Error | null = null
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const raw = await callLLM(userPrompt, config, allImages.length > 0 ? allImages : undefined)
-      const jsonStr = extractJSON(raw)
-      const parsed = JSON.parse(jsonStr) as unknown
-      const analysis = validateAnalysis(parsed)
+      sendLog?.('  → PART A: descripción + diagnóstico')
+      const partA = await runLLMCall(userPrompt, SYSTEM_PROMPT_DEEP_PART_A, config, imgs, 'PART_A', sendLog)
+      sendLog?.('  → PART B: hipótesis + plan + recomendación')
+      const partB = await runLLMCall(userPrompt, SYSTEM_PROMPT_DEEP_PART_B, config, imgs, 'PART_B', sendLog)
+      const merged = mergeDeepResults(partA, partB)
+      const analysis = validateAnalysis(merged)
       if (cacheKey && cacheDir) saveCachedAnalysis(cacheKey, cacheDir, analysis)
       return analysis
     } catch (err) {

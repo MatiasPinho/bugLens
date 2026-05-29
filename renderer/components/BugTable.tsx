@@ -526,12 +526,27 @@ function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
           </SectionCard>
         )}
 
+        {/* 5. INCONSISTENCIAS DETECTADAS — destacar discrepancias reportado vs encontrado */}
+        {analysis.detectedInconsistencies && analysis.detectedInconsistencies.length > 0 && (
+          <InconsistenciesSection items={analysis.detectedInconsistencies} />
+        )}
+
+        {/* 6. HIPÓTESIS PRINCIPALES ordenadas por probabilidad */}
+        {analysis.hypotheses && analysis.hypotheses.length > 0 && (
+          <HypothesesSection items={analysis.hypotheses} />
+        )}
+
         {/* 7 + 8. FIX SUGERIDO + INVESTIGACIÓN */}
         <div className="grid grid-cols-2 gap-3">
-          {analysis.suggestedFixSteps && analysis.suggestedFixSteps.length > 0 && (
+          {(analysis.suggestedFix || (analysis.suggestedFixSteps && analysis.suggestedFixSteps.length > 0)) && (
             <SectionCard title="fix sugerido">
+              {analysis.suggestedFix && analysis.suggestedFix.summary && (
+                <p className="text-xs leading-relaxed mb-2" style={{ color: '#9fa5a9' }}>
+                  {analysis.suggestedFix.summary}
+                </p>
+              )}
               <ol className="space-y-2">
-                {analysis.suggestedFixSteps.map((step, i) => (
+                {(analysis.suggestedFix?.steps?.length ? analysis.suggestedFix.steps : analysis.suggestedFixSteps).map((step, i) => (
                   <li key={i} className="flex gap-2.5">
                     <span className="flex-shrink-0 w-4 h-4 rounded text-xs flex items-center justify-center font-mono mt-0.5"
                       style={{ color: '#798186', border: '1px solid rgba(121,129,134,0.30)', background: 'transparent' }}>
@@ -541,6 +556,12 @@ function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
                   </li>
                 ))}
               </ol>
+              {analysis.suggestedFix?.dependsOn && (
+                <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
+                  <div className="label">depende de</div>
+                  <p className="text-xs leading-relaxed" style={{ color: '#c9a07a' }}>{analysis.suggestedFix.dependsOn}</p>
+                </div>
+              )}
             </SectionCard>
           )}
 
@@ -601,6 +622,14 @@ function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
                       </ul>
                     </div>
                   )}
+                  {f.relevantSnippets && f.relevantSnippets.length > 0 && (
+                    <div className="mt-2 pt-2 space-y-2" style={{ borderTop: '1px solid rgba(93,99,103,0.15)' }}>
+                      <div className="label">snippets relevantes</div>
+                      {f.relevantSnippets.map((s, j) => (
+                        <SnippetView key={j} snippet={s} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -634,6 +663,15 @@ function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
             </SectionCard>
           )}
         </div>
+
+        {/* 13. RECOMENDACIÓN FINAL — conclusión accionable */}
+        {analysis.finalRecommendation && (
+          <SectionCard title="recomendación final" accent>
+            <p className="text-xs leading-relaxed" style={{ color: '#c9c2b4' }}>
+              {analysis.finalRecommendation}
+            </p>
+          </SectionCard>
+        )}
 
         {/* VALIDACIÓN MANUAL — banner si aplica */}
         {analysis.manualValidationNeeded && (
@@ -1060,5 +1098,152 @@ function DocImageGallery({ images }: { images: DocImage[] }) {
         </div>
       )}
     </>
+  )
+}
+
+// ─── Inconsistencies section ──────────────────────────────────────────────────
+// Destaca discrepancias entre lo reportado y lo encontrado — un dev necesita
+// verlas primero porque cambian la dirección del fix.
+
+const inconsistencyTypeLabel: Record<string, string> = {
+  route_mismatch:    'ruta no coincide',
+  module_mismatch:   'módulo no coincide',
+  category_conflict: 'conflicto de categoría',
+  missing_evidence:  'evidencia faltante',
+  naming_mismatch:   'nombre no coincide',
+  other:             'otro',
+}
+
+function InconsistenciesSection({ items }: { items: NonNullable<import('../../src/types/index').BugAnalysis['detectedInconsistencies']> }) {
+  return (
+    <SectionCard title={`inconsistencias detectadas (${items.length})`}>
+      <div className="space-y-2.5">
+        {items.map((inc, i) => (
+          <div key={i} className="rounded p-2.5"
+            style={{ background: 'rgba(180,130,100,0.04)', border: '1px solid rgba(180,130,100,0.20)' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+                style={{ color: '#c9a07a', border: '1px solid rgba(180,130,100,0.35)' }}>
+                {inconsistencyTypeLabel[inc.type] ?? inc.type}
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{inc.description}</p>
+            {inc.impact && (
+              <div className="mt-1.5">
+                <div className="label">impacto</div>
+                <p className="text-xs leading-relaxed" style={{ color: '#798186' }}>{inc.impact}</p>
+              </div>
+            )}
+            {inc.evidence && inc.evidence.length > 0 && (
+              <div className="mt-1.5">
+                <div className="label">evidencia</div>
+                <ul className="space-y-0.5">
+                  {inc.evidence.map((e, j) => (
+                    <li key={j} className="flex items-start gap-1.5">
+                      <span className="text-xs flex-shrink-0" style={{ color: '#343d41' }}>›</span>
+                      <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{e}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  )
+}
+
+// ─── Hypotheses section ───────────────────────────────────────────────────────
+// 2-3 hipótesis ordenadas por probabilidad — evita tunnel vision.
+
+const probabilityStyle: Record<string, { label: string; text: string; bg: string; border: string }> = {
+  high:   { label: 'alta',  text: '#de6145', bg: 'rgba(222,97,69,0.06)',  border: 'rgba(222,97,69,0.25)' },
+  medium: { label: 'media', text: '#c9a07a', bg: 'rgba(180,130,100,0.06)', border: 'rgba(180,130,100,0.25)' },
+  low:    { label: 'baja',  text: '#798186', bg: 'rgba(121,129,134,0.06)', border: 'rgba(121,129,134,0.22)' },
+}
+
+function HypothesesSection({ items }: { items: NonNullable<import('../../src/types/index').BugAnalysis['hypotheses']> }) {
+  return (
+    <SectionCard title={`hipótesis (${items.length})`}>
+      <div className="space-y-2.5">
+        {items.map((h, i) => {
+          const p = probabilityStyle[h.probability] ?? probabilityStyle['medium']
+          return (
+            <div key={i} className="rounded p-2.5"
+              style={{ background: p.bg, border: `1px solid ${p.border}` }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>#{i + 1}</span>
+                <span className="text-xs font-mono px-1.5 py-0.5 rounded flex-shrink-0"
+                  style={{ color: p.text, border: `1px solid ${p.border}` }}>
+                  {p.label}
+                </span>
+                <span className="text-xs leading-relaxed font-medium flex-1" style={{ color: '#cacccc' }}>
+                  {h.title}
+                </span>
+              </div>
+              {h.evidence && h.evidence.length > 0 && (
+                <div className="mt-1.5">
+                  <div className="label">evidencia</div>
+                  <ul className="space-y-0.5">
+                    {h.evidence.map((e, j) => (
+                      <li key={j} className="flex items-start gap-1.5">
+                        <span className="text-xs flex-shrink-0" style={{ color: '#343d41' }}>›</span>
+                        <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{e}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {h.howToValidate && h.howToValidate.length > 0 && (
+                <div className="mt-1.5">
+                  <div className="label">cómo validarla</div>
+                  <ol className="space-y-0.5">
+                    {h.howToValidate.map((v, j) => (
+                      <li key={j} className="flex items-start gap-1.5">
+                        <span className="text-xs font-mono flex-shrink-0" style={{ color: '#4b4e55' }}>{j + 1}.</span>
+                        <span className="text-xs leading-relaxed" style={{ color: '#9fa5a9' }}>{v}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </SectionCard>
+  )
+}
+
+// ─── Snippet view ─────────────────────────────────────────────────────────────
+// Renders un fragmento concreto de código bajo el archivo relacionado.
+// Mantiene la estética de CodeBlock pero compacto.
+
+function SnippetView({ snippet }: { snippet: NonNullable<import('../../src/types/index').RelevantSnippet> }) {
+  const lines = snippet.code.split('\n')
+  return (
+    <div className="rounded overflow-hidden" style={{ border: '1px solid rgba(93,99,103,0.18)' }}>
+      <div className="flex items-center justify-between px-2 py-1"
+        style={{ background: '#0d1013', borderBottom: '1px solid rgba(93,99,103,0.18)' }}>
+        <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>
+          líneas {snippet.startLine}–{snippet.endLine}
+        </span>
+        <CopyButton text={snippet.code} />
+      </div>
+      <pre className="text-xs p-2 overflow-x-auto leading-relaxed" style={{ color: '#9fa5a9', background: '#0d1013' }}>
+        {lines.map((line, i) => (
+          <div key={i} className="flex gap-2">
+            <span className="select-none w-6 text-right flex-shrink-0" style={{ color: '#343d41' }}>{snippet.startLine + i}</span>
+            <span>{line}</span>
+          </div>
+        ))}
+      </pre>
+      {snippet.whyRelevant && (
+        <div className="px-2 py-1.5" style={{ borderTop: '1px solid rgba(93,99,103,0.18)' }}>
+          <span className="text-xs leading-relaxed" style={{ color: '#798186' }}>{snippet.whyRelevant}</span>
+        </div>
+      )}
+    </div>
   )
 }
