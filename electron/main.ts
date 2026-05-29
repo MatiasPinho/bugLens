@@ -430,6 +430,8 @@ ipcMain.handle('cache:clear', () => {
 
 ipcMain.handle('analyze:deep', async (_e, { bug }: { bug: AnalyzedBug }) => {
   const start = Date.now()
+  const bugId = bug.enriched.raw.id
+
   try {
     const s = loadSettings()
     const llmConfig: LLMConfig = getLLMConfig({
@@ -439,11 +441,17 @@ ipcMain.handle('analyze:deep', async (_e, { bug }: { bug: AnalyzedBug }) => {
     })
 
     log('info', `Deep analysis: ${bug.enriched.raw.title}`)
+    sendToRenderer('deep-progress', { type: 'deep-progress', bugId, message: 'iniciando análisis profundo...' })
 
     const repoPaths = [s.frontendRepoPath, s.backendRepoPath].filter(Boolean)
     const analysis = await analyzeBug(
       bug.enriched, llmConfig, repoPaths,
-      (msg) => log('info', msg),
+      (msg) => {
+        log('info', msg)
+        // Stream cada mensaje del agente y de las 2 LLM calls al renderer
+        // El renderer (DeepPendingView) lo muestra para dar feedback de progreso.
+        sendToRenderer('deep-progress', { type: 'deep-progress', bugId, message: msg })
+      },
       getCacheDir()
     )
 
@@ -458,6 +466,7 @@ ipcMain.handle('analyze:deep', async (_e, { bug }: { bug: AnalyzedBug }) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log('error', `Deep analysis falló: ${message}`)
+    sendToRenderer('deep-progress', { type: 'deep-progress', bugId, message: `error: ${message}` })
     return { ok: false, error: message }
   }
 })

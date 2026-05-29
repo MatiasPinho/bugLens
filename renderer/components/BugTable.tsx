@@ -333,7 +333,8 @@ export default function BugTable({
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10" style={{ background: '#101315', borderBottom: '1px solid rgba(93,99,103,0.20)' }}>
             <tr style={{ color: '#5d6367' }} className="text-left font-mono uppercase tracking-wider">
-              <th className="px-4 py-2 font-medium w-8">#</th>
+              <th className="pl-3 pr-1 py-2 font-medium w-4"></th>
+              <th className="px-2 py-2 font-medium w-8">#</th>
               <th className="px-4 py-2 font-medium">título</th>
               <th className="px-4 py-2 font-medium">área</th>
               <th className="px-4 py-2 font-medium">categoría</th>
@@ -360,13 +361,27 @@ export default function BugTable({
                     onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = isFocused ? 'rgba(201,194,180,0.04)' : 'transparent' }}
                     className="cursor-pointer"
                     style={{
-                      borderBottom: '1px solid rgba(93,99,103,0.12)',
-                      background: isExpanded ? '#141719' : isFocused ? 'rgba(201,194,180,0.04)' : 'transparent',
-                      boxShadow: isFocused ? 'inset 2px 0 0 #c9c2b4' : undefined,
+                      borderBottom: isExpanded ? 'none' : '1px solid rgba(93,99,103,0.12)',
+                      // Cuando está expandida: borde crema arriba (continúa hacia el detalle abajo) + fondo más oscuro para que se sienta "abierta"
+                      background: isExpanded ? '#1c2124' : isFocused ? 'rgba(201,194,180,0.04)' : 'transparent',
+                      // Inset lateral: focus = crema. Expanded además marca un borde lateral más fuerte para anclar visualmente
+                      boxShadow: isExpanded
+                        ? 'inset 3px 0 0 #c9c2b4'
+                        : isFocused ? 'inset 2px 0 0 #c9c2b4' : undefined,
                       transition: 'background 0.12s',
                     }}
                   >
-                    <td className="px-4 py-2.5 font-mono" style={{ color: '#343d41' }}>{r.enriched.raw.rowIndex}</td>
+                    <td className="pl-3 pr-1 py-2.5">
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"
+                        className="transition-transform"
+                        style={{
+                          color: isExpanded ? '#c9c2b4' : '#4b4e55',
+                          transform: isExpanded ? 'rotate(90deg)' : 'none',
+                        }}>
+                        <path d="M2 1l4 3-4 3V1z"/>
+                      </svg>
+                    </td>
+                    <td className="px-2 py-2.5 font-mono" style={{ color: '#343d41' }}>{r.enriched.raw.rowIndex}</td>
                     <td className="px-4 py-2.5 max-w-xs">
                       <div className="flex items-center gap-1.5">
                         <div className="font-medium truncate" style={{ color: '#cacccc' }}>{r.enriched.raw.title}</div>
@@ -392,9 +407,23 @@ export default function BugTable({
 
                   {isExpanded && (
                     <tr>
-                      <td colSpan={7} className="p-0">
+                      <td colSpan={8} className="p-0"
+                        style={{
+                          // Carril crema lateral continuo desde la fila madre arriba +
+                          // border-bottom crema que cierra el bloque. Sin top-border porque
+                          // está pegado a la fila madre (que ya marca el cambio visual).
+                          borderBottom: '2px solid rgba(201,194,180,0.45)',
+                          boxShadow:    'inset 3px 0 0 #c9c2b4',
+                          background:   '#0d1013',
+                        }}>
                         <ExpandedDetail result={r} onDeepAnalysis={onDeepAnalysis} />
                       </td>
+                    </tr>
+                  )}
+                  {/* Separator después del detalle expandido — espacio para que la siguiente fila no se mezcle */}
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={8} className="h-2" style={{ background: '#101315' }} />
                     </tr>
                   )}
                 </React.Fragment>
@@ -474,7 +503,7 @@ function ExpandedDetail({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
 
       {/* Loader para deep_pending */}
       {isPending && (
-        <DeepPendingView />
+        <DeepPendingView bugId={raw.id} />
       )}
 
       {/* Vista completa para deep_completed y failed */}
@@ -949,23 +978,116 @@ function FastTriageView({ result, onDeepAnalysis }: { result: AnalyzedBug; onDee
 }
 
 // ─── Deep analysis pending view ───────────────────────────────────────────────
+// Se suscribe a deep-progress events del bug específico y muestra el stream en vivo:
+// pre-seed grep → tool calls del agente → PART A → PART B → mergeo.
+// Da feedback constante de que el proceso avanza vs un spinner sin contexto.
 
-function DeepPendingView() {
+const DEEP_STEPS = [
+  { label: 'lectura inicial',  match: /investigando|pre-seed/i },
+  { label: 'navegación código', match: /grep|read_file|list_directory|🔍|🌱/i },
+  { label: 'descripción',       match: /PART A|descripci/i },
+  { label: 'plan de acción',    match: /PART B|hip[oó]tesis|inconsistencias|recomendaci/i },
+] as const
+
+function detectStep(messages: string[]): number {
+  for (let i = DEEP_STEPS.length - 1; i >= 0; i--) {
+    if (messages.some((m) => DEEP_STEPS[i].match.test(m))) return i
+  }
+  return 0
+}
+
+function DeepPendingView({ bugId }: { bugId: string }) {
+  const [messages, setMessages] = useState<string[]>([])
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const startRef = React.useRef<number>(Date.now())
+  const listRef  = React.useRef<HTMLDivElement | null>(null)
+
+  // Suscripción al stream — solo eventos del bugId actual
+  useEffect(() => {
+    startRef.current = Date.now()
+    setMessages([])
+    setElapsedMs(0)
+
+    const unsubscribe = window.electronAPI.onDeepProgress((ev) => {
+      if (ev.bugId !== bugId) return
+      setMessages((prev) => [...prev.slice(-14), ev.message])  // últimas 15 líneas máx
+    })
+    const interval = setInterval(() => setElapsedMs(Date.now() - startRef.current), 500)
+
+    return () => { unsubscribe(); clearInterval(interval) }
+  }, [bugId])
+
+  // Auto-scroll del log al fondo cuando llega un mensaje
+  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight }) }, [messages])
+
+  const currentStep = detectStep(messages)
+  const seconds = Math.floor(elapsedMs / 1000)
+  const estimatedMax = 180  // ~3 min de upper bound
+  const pct = Math.min((seconds / estimatedMax) * 100, 95)
+
   return (
-    <div className="p-8" style={{ background: 'rgba(16,19,21,0.70)' }}>
-      <div className="flex flex-col items-center justify-center gap-4 py-12">
+    <div className="p-5 space-y-4" style={{ background: 'rgba(16,19,21,0.70)' }}>
+      {/* Header con spinner + tiempo transcurrido */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#c9c2b4' }} />
-          <span className="text-xs font-mono" style={{ color: '#c9c2b4' }}>análisis profundo en proceso</span>
+          <span className="text-xs font-mono uppercase tracking-wider" style={{ color: '#c9c2b4' }}>análisis profundo en proceso</span>
         </div>
-        <p className="text-xs font-mono text-center max-w-md leading-relaxed" style={{ color: '#4b4e55' }}>
-          el agente está navegando el código fuente, leyendo archivos relevantes,
-          y construyendo el análisis estructurado. tarda ~2-4 minutos por bug.
-        </p>
-        <p className="text-xs font-mono" style={{ color: '#343d41' }}>
-          podés seguir trabajando — esto corre en background
-        </p>
+        <span className="text-xs font-mono" style={{ color: '#4b4e55' }}>
+          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        </span>
       </div>
+
+      {/* Barra de progreso estimado */}
+      <div>
+        <div className="w-full rounded-full h-1" style={{ background: 'rgba(75,78,85,0.35)' }}>
+          <div
+            className="h-1 rounded-full transition-all duration-700"
+            style={{ background: '#c9c2b4', width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Pasos del pipeline deep — el actual iluminado */}
+      <div className="flex items-center gap-1.5">
+        {DEEP_STEPS.map((s, i) => {
+          const isPast    = i < currentStep
+          const isCurrent = i === currentStep
+          const color = isCurrent ? '#c9c2b4' : isPast ? '#9fa5a9' : '#343d41'
+          return (
+            <div key={s.label} className="flex items-center flex-1 min-w-0 gap-1.5">
+              <div className="flex-1 h-0.5 rounded-full" style={{ background: color, opacity: isCurrent ? 1 : isPast ? 0.6 : 0.3 }} />
+              <span className="text-xs font-mono uppercase tracking-wider flex-shrink-0" style={{ color }}>{s.label}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Stream de log en vivo */}
+      <div
+        ref={listRef}
+        className="rounded p-3 max-h-48 overflow-y-auto font-mono text-xs leading-relaxed space-y-0.5"
+        style={{ background: '#0d1013', border: '1px solid rgba(93,99,103,0.18)' }}
+      >
+        {messages.length === 0 ? (
+          <div style={{ color: '#343d41' }}>esperando primeras lecturas...</div>
+        ) : (
+          messages.map((m, i) => {
+            const isLast = i === messages.length - 1
+            return (
+              <div key={i} className="flex gap-2"
+                style={{ color: isLast ? '#9fa5a9' : '#4b4e55' }}>
+                <span className="flex-shrink-0" style={{ color: '#343d41' }}>›</span>
+                <span className="break-all">{m.replace(/^\s+/, '')}</span>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <p className="text-xs font-mono text-center" style={{ color: '#343d41' }}>
+        podés seguir trabajando — esto corre en background
+      </p>
     </div>
   )
 }

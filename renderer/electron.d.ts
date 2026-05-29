@@ -55,6 +55,7 @@ interface ElectronAPI {
   onAnalysisComplete(cb: (event: IPCEvent) => void): () => void
   onBugResult(cb: (event: IPCEvent) => void): () => void
   onIndexProgress(cb: (event: IPCEvent) => void): () => void
+  onDeepProgress(cb: (event: { type: 'deep-progress'; bugId: string; message: string }) => void): () => void
 }
 
 declare global {

@@ -66,4 +66,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('index-progress', handler)
     return () => ipcRenderer.removeListener('index-progress', handler)
   },
+
+  // Deep analysis streaming — emite cada mensaje del agente/LLM durante analyze:deep
+  onDeepProgress: (cb: (event: { type: 'deep-progress'; bugId: string; message: string }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { type: 'deep-progress'; bugId: string; message: string }) => cb(data)
+    ipcRenderer.on('deep-progress', handler)
+    return () => ipcRenderer.removeListener('deep-progress', handler)
+  },
 })
